@@ -76,6 +76,17 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getContactCustomFieldsUsesContactDocumentTypeQuery() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/categories/custom_fields?document_type=Contact")
+            return makeJSONResponse(statusCode: 200, body: WBCustomFieldDefinitions.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        _ = try client.getContactCustomFields()
+    }
+
+    @Test
     func getEventsWithCategoriesFetchesCategoriesBeforeEventsAndEnrichesResults() throws {
         nonisolated(unsafe) var requestedPaths: [String] = []
         let session = URLSession.stubbed { request in

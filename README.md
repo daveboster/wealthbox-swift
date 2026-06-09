@@ -61,6 +61,7 @@ missing, it prompts silently. You can override the Keychain lookup with
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox me --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact 48828625 --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --week 0 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event 77622943 --pretty
@@ -81,6 +82,9 @@ category id as `event_category`.
 
 Use `event-custom-fields` to fetch the custom field definitions and available
 options for events from `/v1/categories/custom_fields?document_type=Event`.
+
+Use `contact-custom-fields` to fetch the custom field definitions and available
+options for contacts from `/v1/categories/custom_fields?document_type=Contact`.
 
 Use `events --include-categories` to fetch event categories before fetching
 events and append the matching category object under `category` in each event.

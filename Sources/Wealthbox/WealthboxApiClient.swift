@@ -58,9 +58,11 @@ public final class WealthboxApiClient: Sendable {
     }
 
     public func getEventCustomFields() throws -> WBCustomFieldDefinitions {
-        try get(.customFields, queryItems: [
-            URLQueryItem(name: "document_type", value: "Event")
-        ])
+        try getCustomFields(documentType: "Event")
+    }
+
+    public func getContactCustomFields() throws -> WBCustomFieldDefinitions {
+        try getCustomFields(documentType: "Contact")
     }
 
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
@@ -142,6 +144,12 @@ public final class WealthboxApiClient: Sendable {
             return try T.decode(capturedBody) as! T
         }
         throw WealthboxError.internalError
+    }
+
+    private func getCustomFields(documentType: String) throws -> WBCustomFieldDefinitions {
+        try get(.customFields, queryItems: [
+            URLQueryItem(name: "document_type", value: documentType)
+        ])
     }
 
     private func endpoint(_ method: FetchMethods, id: Int?, queryItems: [URLQueryItem]) -> URL? {

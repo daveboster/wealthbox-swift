@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Wealthbox
 
-struct EventCustomFieldTests {
+struct CustomFieldDefinitionTests {
     @Test
     func customFieldDefinitionsDecodeOptions() throws {
         let definitions = try WBCustomFieldDefinitions.decode(
@@ -33,5 +33,31 @@ struct EventCustomFieldTests {
         #expect(field.fieldType == "single_select")
         #expect(field.options?.first?.id == 10)
         #expect(field.options?.first?.label == "Annual Review")
+    }
+
+    @Test
+    func contactCustomFieldDefinitionsDecodeContactDocumentType() throws {
+        let definitions = try WBCustomFieldDefinitions.decode(
+            """
+            {
+              "custom_fields": [
+                {
+                  "id": 2,
+                  "name": "Client Segment",
+                  "document_type": "Contact",
+                  "field_type": "text",
+                  "options": []
+                }
+              ]
+            }
+            """
+        )
+
+        let field = try #require(definitions.customFields.first)
+        #expect(field.id == 2)
+        #expect(field.name == "Client Segment")
+        #expect(field.documentType == "Contact")
+        #expect(field.fieldType == "text")
+        #expect(field.options?.isEmpty == true)
     }
 }
