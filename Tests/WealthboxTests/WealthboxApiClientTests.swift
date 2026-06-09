@@ -202,6 +202,80 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func updateEventStateFetchesEventThenPutsRequiredFieldsCurrentCategoryAndNewState() throws {
+        nonisolated(unsafe) var requests: [String] = []
+        let session = URLSession.stubbed { request in
+            requests.append("\(request.httpMethod ?? "") \(request.url?.path ?? "")")
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/events/1" {
+                return makeJSONResponse(statusCode: 200, body: WBEvent.sampleJSON(), request: request)
+            }
+
+            if request.httpMethod == "PUT", request.url?.path == "/v1/events/1" {
+                let body = try #require(requestBodyData(from: request))
+                let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                #expect(json["title"] as? String == "Client Meeting")
+                #expect(json["starts_at"] as? String == "2015-05-24 10:00 AM -0400")
+                #expect(json["ends_at"] as? String == "2015-05-24 11:00 AM -0400")
+                #expect(json["event_category"] as? Int == 2)
+                #expect(json["state"] as? String == "completed")
+                return makeJSONResponse(statusCode: 200, body: eventJSON(categoryId: 2, state: "completed"), request: request)
+            }
+
+            return makeJSONResponse(statusCode: 404, body: "Unexpected request", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let event = try client.updateEventState(eventId: 1, fromState: "confirmed", toState: "completed")
+
+        #expect(requests == ["GET /v1/events/1", "PUT /v1/events/1"])
+        #expect(event.state == "completed")
+    }
+
+    @Test
+    func updateEventStateDoesNotPutWhenCurrentStateDoesNotMatchExpectedFromState() throws {
+        nonisolated(unsafe) var requests: [String] = []
+        let session = URLSession.stubbed { request in
+            requests.append("\(request.httpMethod ?? "") \(request.url?.path ?? "")")
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/events/1" {
+                return makeJSONResponse(statusCode: 200, body: WBEvent.sampleJSON(), request: request)
+            }
+
+            return makeJSONResponse(statusCode: 500, body: "PUT should not be sent", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        do {
+            _ = try client.updateEventState(eventId: 1, fromState: "tentative", toState: "completed")
+            Issue.record("Expected mismatched from state to throw.")
+        } catch let error as WealthboxError {
+            #expect(error == .validationError(message: "Event 1 has state 'confirmed', expected 'tentative'. No update sent."))
+        }
+
+        #expect(requests == ["GET /v1/events/1"])
+    }
+
+    @Test
+    func updateEventStateRejectsInvalidStateBeforeFetchingEvent() throws {
+        nonisolated(unsafe) var requestCount = 0
+        let session = URLSession.stubbed { request in
+            requestCount += 1
+            return makeJSONResponse(statusCode: 500, body: "Request should not be sent", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        do {
+            _ = try client.updateEventState(eventId: 1, fromState: "confirmed", toState: "done")
+            Issue.record("Expected invalid to state to throw.")
+        } catch let error as WealthboxError {
+            #expect(error == .validationError(message: "Invalid event state 'done'. Use one of: unconfirmed, confirmed, tentative, completed, cancelled."))
+        }
+
+        #expect(requestCount == 0)
+    }
+
+    @Test
     func errorStatusCodesMapToWealthboxErrors() throws {
         try assertStatusCode(400, body: "Bad request body", mapsTo: .badRequest(message: "Bad request body"))
         try assertStatusCode(401, body: "Unauthorized body", mapsTo: .unauthorized(message: "Unauthorized body"))
@@ -289,7 +363,7 @@ private func makeJSONResponse(statusCode: Int, body: String, request: URLRequest
     return (response, body.data(using: .utf8))
 }
 
-private func eventJSON(categoryId: Int) -> String {
+private func eventJSON(categoryId: Int, state: String = "confirmed") -> String {
     """
     {
       "id": 1,
@@ -304,7 +378,7 @@ private func eventJSON(categoryId: Int) -> String {
       "all_day": true,
       "location": "Conference Room",
       "description": "Review meeting for Kevin...",
-      "state": "confirmed",
+      "state": "\(state)",
       "visible_to": "Everyone",
       "email_invitees": true,
       "linked_to": [],

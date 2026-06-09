@@ -69,6 +69,7 @@ WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-categories --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-category 77622943 --from-category-id 2 --to-category-id 1 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-category 77622943 --from-category-name "Review" --to-category-name "Client Meeting" --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-status 77622943 --from-status confirmed --to-status completed --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --include-categories --pretty
 ```
 
@@ -97,6 +98,11 @@ checking the event currently has the expected category. Pass exactly one
 `--from-category-id` or `--from-category-name`, and exactly one
 `--to-category-id` or `--to-category-name`. If the fetched event category does
 not match the `from` selector, no update is sent.
+
+Use `event-update-status` to update an event's `state` only after checking the
+event currently has the expected status. Valid statuses are `unconfirmed`,
+`confirmed`, `tentative`, `completed`, and `cancelled`. If the fetched event
+state does not match `--from-status`, no update is sent.
 
 ## Validation
 

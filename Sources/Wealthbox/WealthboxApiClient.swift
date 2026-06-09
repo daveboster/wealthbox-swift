@@ -10,6 +10,7 @@ public enum FetchMethods: String, Sendable {
 
 public final class WealthboxApiClient: Sendable {
     public static let defaultBaseUrl = "https://api.crmworkspace.com"
+    public static let eventStates = ["unconfirmed", "confirmed", "tentative", "completed", "cancelled"]
 
     private let baseURL: String
     private let accessToken: String?
@@ -82,6 +83,25 @@ public final class WealthboxApiClient: Sendable {
         let fromCategory = try resolveEventCategory(named: fromCategoryName, in: categories)
         let toCategory = try resolveEventCategory(named: toCategoryName, in: categories)
         return try updateEventCategory(eventId: eventId, fromCategoryId: fromCategory.id, toCategoryId: toCategory.id)
+    }
+
+    public func updateEventState(eventId: Int, fromState: String, toState: String) throws -> WBEvent {
+        let normalizedFromState = try normalizedEventState(fromState)
+        let normalizedToState = try normalizedEventState(toState)
+        let event = try getEvent(id: eventId)
+        let currentState = event.state ?? "nil"
+        guard currentState.caseInsensitiveCompare(normalizedFromState) == .orderedSame else {
+            throw WealthboxError.validationError(
+                message: "Event \(eventId) has state '\(currentState)', expected '\(normalizedFromState)'. No update sent."
+            )
+        }
+
+        let body = try WBEventUpdateRequest(
+            event: event,
+            eventCategory: event.eventCategory,
+            state: normalizedToState
+        )
+        return try put(.events, id: eventId, body: body)
     }
 
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
@@ -196,6 +216,16 @@ public final class WealthboxApiClient: Sendable {
             throw WealthboxError.validationError(message: "No event category named '\(name)' was found. No update sent.")
         }
         throw WealthboxError.validationError(message: "Multiple event categories named '\(name)' were found. No update sent.")
+    }
+
+    private func normalizedEventState(_ state: String) throws -> String {
+        let normalized = state.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard Self.eventStates.contains(normalized) else {
+            throw WealthboxError.validationError(
+                message: "Invalid event state '\(state)'. Use one of: \(Self.eventStates.joined(separator: ", "))."
+            )
+        }
+        return normalized
     }
 
     private func getCustomFields(documentType: String) throws -> WBCustomFieldDefinitions {

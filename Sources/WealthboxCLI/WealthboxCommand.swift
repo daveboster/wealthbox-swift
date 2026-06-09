@@ -16,7 +16,8 @@ struct WealthboxCommand: ParsableCommand {
             EventCategories.self,
             EventCustomFields.self,
             ContactCustomFields.self,
-            EventUpdateCategory.self
+            EventUpdateCategory.self,
+            EventUpdateStatus.self
         ]
     )
 }
@@ -252,5 +253,32 @@ struct EventUpdateCategory: ParsableCommand {
             throw ValidationError("No event category named '\(name)' was found. No update sent.")
         }
         throw ValidationError("Multiple event categories named '\(name)' were found. No update sent.")
+    }
+}
+
+struct EventUpdateStatus: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "event-update-status",
+        abstract: "Update an event status after validating its current status."
+    )
+
+    @Argument(help: "The Wealthbox event identifier.")
+    var eventId: Int
+
+    @Option(help: "Expected current event status. Choices: unconfirmed, confirmed, tentative, completed, cancelled.")
+    var fromStatus: String
+
+    @Option(help: "New event status. Choices: unconfirmed, confirmed, tentative, completed, cancelled.")
+    var toStatus: String
+
+    @OptionGroup var options: ClientOptions
+
+    func run() throws {
+        let event = try options.makeClient().updateEventState(
+            eventId: eventId,
+            fromState: fromStatus,
+            toState: toStatus
+        )
+        try options.printJSON(event)
     }
 }
