@@ -65,17 +65,55 @@ public final class WealthboxApiClient: Sendable {
         try getCustomFields(documentType: "Contact")
     }
 
+    public func updateEventCategory(eventId: Int, fromCategoryId: Int, toCategoryId: Int) throws -> WBEvent {
+        let event = try getEvent(id: eventId)
+        guard event.eventCategory == fromCategoryId else {
+            throw WealthboxError.validationError(
+                message: "Event \(eventId) has event_category \(event.eventCategory?.description ?? "nil"), expected \(fromCategoryId). No update sent."
+            )
+        }
+
+        let body = try WBEventUpdateRequest(event: event, eventCategory: toCategoryId)
+        return try put(.events, id: eventId, body: body)
+    }
+
+    public func updateEventCategory(eventId: Int, fromCategoryName: String, toCategoryName: String) throws -> WBEvent {
+        let categories = try getEventCategories()
+        let fromCategory = try resolveEventCategory(named: fromCategoryName, in: categories)
+        let toCategory = try resolveEventCategory(named: toCategoryName, in: categories)
+        return try updateEventCategory(eventId: eventId, fromCategoryId: fromCategory.id, toCategoryId: toCategory.id)
+    }
+
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
+        try send(method, id: id, queryItems: queryItems, httpMethod: "GET", body: Optional<Data>.none)
+    }
+
+    private func put<T: WBData, Body: Encodable>(_ method: FetchMethods, id: Int? = nil, body: Body) throws -> T {
+        let data = try JSONEncoder().encode(body)
+        return try send(method, id: id, httpMethod: "PUT", body: data)
+    }
+
+    private func send<T: WBData>(
+        _ method: FetchMethods,
+        id: Int? = nil,
+        queryItems: [URLQueryItem] = [],
+        httpMethod: String,
+        body: Data?
+    ) throws -> T {
         guard let url = endpoint(method, id: id, queryItems: queryItems) else {
             throw WealthboxError.internalError
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = httpMethod
         if let accessToken {
             request.setValue(accessToken, forHTTPHeaderField: "ACCESS_TOKEN")
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
 
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
@@ -144,6 +182,20 @@ public final class WealthboxApiClient: Sendable {
             return try T.decode(capturedBody) as! T
         }
         throw WealthboxError.internalError
+    }
+
+    private func resolveEventCategory(named name: String, in categories: WBEventCategories) throws -> WBCategoryMember {
+        let matches = categories.eventCategories.filter {
+            $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }
+
+        if matches.count == 1, let match = matches.first {
+            return match
+        }
+        if matches.isEmpty {
+            throw WealthboxError.validationError(message: "No event category named '\(name)' was found. No update sent.")
+        }
+        throw WealthboxError.validationError(message: "Multiple event categories named '\(name)' were found. No update sent.")
     }
 
     private func getCustomFields(documentType: String) throws -> WBCustomFieldDefinitions {

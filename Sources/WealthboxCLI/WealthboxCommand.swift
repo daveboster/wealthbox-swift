@@ -15,7 +15,8 @@ struct WealthboxCommand: ParsableCommand {
             Event.self,
             EventCategories.self,
             EventCustomFields.self,
-            ContactCustomFields.self
+            ContactCustomFields.self,
+            EventUpdateCategory.self
         ]
     )
 }
@@ -178,5 +179,78 @@ struct ContactCustomFields: ParsableCommand {
     func run() throws {
         let customFields = try options.makeClient().getContactCustomFields()
         try options.printJSON(customFields)
+    }
+}
+
+struct EventUpdateCategory: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "event-update-category",
+        abstract: "Update an event category after validating its current category."
+    )
+
+    @Argument(help: "The Wealthbox event identifier.")
+    var eventId: Int
+
+    @Option(help: "Expected current event category id.")
+    var fromCategoryId: Int?
+
+    @Option(help: "Expected current event category name.")
+    var fromCategoryName: String?
+
+    @Option(help: "New event category id.")
+    var toCategoryId: Int?
+
+    @Option(help: "New event category name.")
+    var toCategoryName: String?
+
+    @OptionGroup var options: ClientOptions
+
+    func run() throws {
+        try validateSelector(id: fromCategoryId, name: fromCategoryName, label: "from")
+        try validateSelector(id: toCategoryId, name: toCategoryName, label: "to")
+
+        let client = try options.makeClient()
+        let fromId: Int
+        let toId: Int
+
+        if let fromCategoryId, let toCategoryId {
+            fromId = fromCategoryId
+            toId = toCategoryId
+        } else {
+            let categories = try client.getEventCategories()
+            fromId = try fromCategoryId ?? resolveCategoryId(named: fromCategoryName, in: categories)
+            toId = try toCategoryId ?? resolveCategoryId(named: toCategoryName, in: categories)
+        }
+
+        let event = try client.updateEventCategory(eventId: eventId, fromCategoryId: fromId, toCategoryId: toId)
+        try options.printJSON(event)
+    }
+
+    private func validateSelector(id: Int?, name: String?, label: String) throws {
+        switch (id, name?.isEmpty == false ? name : nil) {
+        case (.some, nil), (nil, .some):
+            return
+        case (.none, .none):
+            throw ValidationError("Pass exactly one --\(label)-category-id or --\(label)-category-name.")
+        case (.some, .some):
+            throw ValidationError("Pass only one --\(label)-category-id or --\(label)-category-name.")
+        }
+    }
+
+    private func resolveCategoryId(named name: String?, in categories: WBEventCategories) throws -> Int {
+        guard let name else {
+            throw ValidationError("Missing category name.")
+        }
+
+        let matches = categories.eventCategories.filter {
+            $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }
+        if matches.count == 1, let match = matches.first {
+            return match.id
+        }
+        if matches.isEmpty {
+            throw ValidationError("No event category named '\(name)' was found. No update sent.")
+        }
+        throw ValidationError("Multiple event categories named '\(name)' were found. No update sent.")
     }
 }

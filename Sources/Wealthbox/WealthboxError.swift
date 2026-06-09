@@ -10,6 +10,7 @@ import Foundation
 public enum WealthboxError: LocalizedError, Equatable {
     case internalError
     case serverError(code: Int, message: String?)
+    case validationError(message: String)
     case badRequest(message: String) // 400 Bad Request
     case unauthorized(message: String) // 401 Unauthorized
     case internalServerError(message: String) // 500 Internal Server Error
@@ -20,6 +21,8 @@ public enum WealthboxError: LocalizedError, Equatable {
             return "An internal error occurred."
         case .serverError(let code, _):
             return "The server returned an error (\(code))."
+        case .validationError:
+            return "Validation Error."
         case .badRequest:
             return "Bad Request."
         case .unauthorized:
@@ -39,6 +42,8 @@ public enum WealthboxError: LocalizedError, Equatable {
             } else {
                 return "The server responded with an error status."
             }
+        case .validationError(let message):
+            return message
         case .badRequest(let message):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty
@@ -63,6 +68,8 @@ public enum WealthboxError: LocalizedError, Equatable {
             return "Please try again. If the problem persists, contact support."
         case .serverError:
             return "Please try again later. If the issue persists, contact support with the error code."
+        case .validationError:
+            return "Please verify the command arguments and current Wealthbox data, then try again."
         case .badRequest:
             return "Please verify the request parameters and try again."
         case .unauthorized:
@@ -78,6 +85,8 @@ public enum WealthboxError: LocalizedError, Equatable {
             return "Wealthbox Help: Internal Error"
         case .serverError(let code, _):
             return "Wealthbox Help: Server Error \(code)"
+        case .validationError:
+            return "Wealthbox Help: Validation Error"
         case .badRequest:
             return "Wealthbox Help: 400 Bad Request"
         case .unauthorized:
@@ -93,6 +102,8 @@ public enum WealthboxError: LocalizedError, Equatable {
             return true
         case let (.serverError(lc, lm), .serverError(rc, rm)):
             return lc == rc && lm == rm
+        case let (.validationError(lm), .validationError(rm)):
+            return lm == rm
         case let (.badRequest(lm), .badRequest(rm)):
             return lm == rm
         case let (.unauthorized(lm), .unauthorized(rm)):

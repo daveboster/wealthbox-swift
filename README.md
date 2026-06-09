@@ -67,10 +67,12 @@ WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --week 0 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event 77622943 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-categories --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-custom-fields --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-category 77622943 --from-category-id 2 --to-category-id 1 --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-category 77622943 --from-category-name "Review" --to-category-name "Client Meeting" --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --include-categories --pretty
 ```
 
-The CLI is read-only in the first release.
+The CLI is read-only except for explicit update commands.
 
 The `events --week <offset>` option filters fetched events by the event
 `starts_at` value. Weeks start on Sunday. Use `0` for the current week, `-1` for
@@ -89,6 +91,12 @@ options for contacts from `/v1/categories/custom_fields?document_type=Contact`.
 Use `events --include-categories` to fetch event categories before fetching
 events and append the matching category object under `category` in each event.
 The original `event_category` id remains unchanged.
+
+Use `event-update-category` to update an event's `event_category` only after
+checking the event currently has the expected category. Pass exactly one
+`--from-category-id` or `--from-category-name`, and exactly one
+`--to-category-id` or `--to-category-name`. If the fetched event category does
+not match the `from` selector, no update is sent.
 
 ## Validation
 

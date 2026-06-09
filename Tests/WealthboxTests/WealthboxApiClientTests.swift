@@ -110,6 +110,98 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func updateEventCategoryFetchesEventThenPutsRequiredFieldsAndNewCategory() throws {
+        nonisolated(unsafe) var requests: [String] = []
+        let session = URLSession.stubbed { request in
+            requests.append("\(request.httpMethod ?? "") \(request.url?.path ?? "")")
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/events/1" {
+                return makeJSONResponse(statusCode: 200, body: WBEvent.sampleJSON(), request: request)
+            }
+
+            if request.httpMethod == "PUT", request.url?.path == "/v1/events/1" {
+                #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+                let body = try #require(requestBodyData(from: request))
+                let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                #expect(json["title"] as? String == "Client Meeting")
+                #expect(json["starts_at"] as? String == "2015-05-24 10:00 AM -0400")
+                #expect(json["ends_at"] as? String == "2015-05-24 11:00 AM -0400")
+                #expect(json["event_category"] as? Int == 3)
+                #expect(json["category"] == nil)
+                #expect(json["id"] == nil)
+                return makeJSONResponse(statusCode: 200, body: eventJSON(categoryId: 3), request: request)
+            }
+
+            return makeJSONResponse(statusCode: 404, body: "Unexpected request", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let event = try client.updateEventCategory(eventId: 1, fromCategoryId: 2, toCategoryId: 3)
+
+        #expect(requests == ["GET /v1/events/1", "PUT /v1/events/1"])
+        #expect(event.eventCategory == 3)
+    }
+
+    @Test
+    func updateEventCategoryDoesNotPutWhenCurrentCategoryDoesNotMatchExpectedFromCategory() throws {
+        nonisolated(unsafe) var requests: [String] = []
+        let session = URLSession.stubbed { request in
+            requests.append("\(request.httpMethod ?? "") \(request.url?.path ?? "")")
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/events/1" {
+                return makeJSONResponse(statusCode: 200, body: WBEvent.sampleJSON(), request: request)
+            }
+
+            return makeJSONResponse(statusCode: 500, body: "PUT should not be sent", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        do {
+            _ = try client.updateEventCategory(eventId: 1, fromCategoryId: 99, toCategoryId: 3)
+            Issue.record("Expected mismatched from category to throw.")
+        } catch let error as WealthboxError {
+            #expect(error == .validationError(message: "Event 1 has event_category 2, expected 99. No update sent."))
+        }
+
+        #expect(requests == ["GET /v1/events/1"])
+    }
+
+    @Test
+    func updateEventCategoryByNameResolvesNamesBeforeUpdating() throws {
+        nonisolated(unsafe) var requests: [String] = []
+        let session = URLSession.stubbed { request in
+            requests.append("\(request.httpMethod ?? "") \(request.url?.path ?? "")")
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/categories/event_categories" {
+                return makeJSONResponse(statusCode: 200, body: WBEventCategories.sampleJSON(), request: request)
+            }
+
+            if request.httpMethod == "GET", request.url?.path == "/v1/events/1" {
+                return makeJSONResponse(statusCode: 200, body: WBEvent.sampleJSON(), request: request)
+            }
+
+            if request.httpMethod == "PUT", request.url?.path == "/v1/events/1" {
+                let body = try #require(requestBodyData(from: request))
+                let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                #expect(json["event_category"] as? Int == 1)
+                return makeJSONResponse(statusCode: 200, body: eventJSON(categoryId: 1), request: request)
+            }
+
+            return makeJSONResponse(statusCode: 404, body: "Unexpected request", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let event = try client.updateEventCategory(eventId: 1, fromCategoryName: "review", toCategoryName: "Client Meeting")
+
+        #expect(requests == [
+            "GET /v1/categories/event_categories",
+            "GET /v1/events/1",
+            "PUT /v1/events/1"
+        ])
+        #expect(event.eventCategory == 1)
+    }
+
+    @Test
     func errorStatusCodesMapToWealthboxErrors() throws {
         try assertStatusCode(400, body: "Bad request body", mapsTo: .badRequest(message: "Bad request body"))
         try assertStatusCode(401, body: "Unauthorized body", mapsTo: .unauthorized(message: "Unauthorized body"))
@@ -195,4 +287,60 @@ private func makeJSONResponse(statusCode: Int, body: String, request: URLRequest
         headerFields: ["Content-Type": "application/json"]
     )!
     return (response, body.data(using: .utf8))
+}
+
+private func eventJSON(categoryId: Int) -> String {
+    """
+    {
+      "id": 1,
+      "creator": 1,
+      "created_at": "2015-05-24 10:00 AM -0400",
+      "updated_at": "2015-10-12 11:30 PM -0400",
+      "title": "Client Meeting",
+      "starts_at": "2015-05-24 10:00 AM -0400",
+      "ends_at": "2015-05-24 11:00 AM -0400",
+      "repeats": true,
+      "event_category": \(categoryId),
+      "all_day": true,
+      "location": "Conference Room",
+      "description": "Review meeting for Kevin...",
+      "state": "confirmed",
+      "visible_to": "Everyone",
+      "email_invitees": true,
+      "linked_to": [],
+      "invitees": [],
+      "custom_fields": []
+    }
+    """
+}
+
+private func requestBodyData(from request: URLRequest) -> Data? {
+    if let httpBody = request.httpBody {
+        return httpBody
+    }
+
+    guard let stream = request.httpBodyStream else {
+        return nil
+    }
+
+    stream.open()
+    defer { stream.close() }
+
+    var data = Data()
+    let bufferSize = 1024
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+    defer { buffer.deallocate() }
+
+    while stream.hasBytesAvailable {
+        let count = stream.read(buffer, maxLength: bufferSize)
+        if count < 0 {
+            return nil
+        }
+        if count == 0 {
+            break
+        }
+        data.append(buffer, count: count)
+    }
+
+    return data
 }
