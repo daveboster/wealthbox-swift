@@ -62,6 +62,29 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getEventsWithCategoriesFetchesCategoriesBeforeEventsAndEnrichesResults() throws {
+        nonisolated(unsafe) var requestedPaths: [String] = []
+        let session = URLSession.stubbed { request in
+            requestedPaths.append(request.url?.path ?? "")
+            if request.url?.path == "/v1/categories/event_categories" {
+                return makeJSONResponse(statusCode: 200, body: WBEventCategories.sampleJSON(), request: request)
+            }
+            if request.url?.path == "/v1/events" {
+                return makeJSONResponse(statusCode: 200, body: WBEvents.sampleJSON(), request: request)
+            }
+            return makeJSONResponse(statusCode: 404, body: "Unexpected path", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let events = try client.getEvents(includeCategories: true)
+
+        #expect(requestedPaths == ["/v1/categories/event_categories", "/v1/events"])
+        #expect(events.events.first?.eventCategory == 2)
+        #expect(events.events.first?.category?.id == 2)
+        #expect(events.events.first?.category?.name == "Review")
+    }
+
+    @Test
     func errorStatusCodesMapToWealthboxErrors() throws {
         try assertStatusCode(400, body: "Bad request body", mapsTo: .badRequest(message: "Bad request body"))
         try assertStatusCode(401, body: "Unauthorized body", mapsTo: .unauthorized(message: "Unauthorized body"))

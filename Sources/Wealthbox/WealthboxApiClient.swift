@@ -42,8 +42,14 @@ public final class WealthboxApiClient: Sendable {
         try get(.events, id: id)
     }
 
-    public func getEvents() throws -> WBEvents {
-        try get(.events)
+    public func getEvents(includeCategories: Bool = false) throws -> WBEvents {
+        if includeCategories {
+            let categories = try getEventCategories()
+            let events: WBEvents = try get(.events)
+            return events.enrichedWithCategories(categories)
+        }
+
+        return try get(.events)
     }
 
     public func getEventCategories() throws -> WBEventCategories {

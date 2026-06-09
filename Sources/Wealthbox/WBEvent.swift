@@ -29,6 +29,7 @@ public struct WBEvent: WBData, Codable, Sendable {
     public let linkedTo: [WBContactLink]
     public let invitees: [WBContactLink]
     public let customFields: [WBCustomField]
+    public let category: WBCategoryMember?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -49,6 +50,7 @@ public struct WBEvent: WBData, Codable, Sendable {
         case linkedTo = "linked_to"
         case invitees
         case customFields = "custom_fields"
+        case category
     }
     
     public static func fromJSONString(_ jsonString: String) -> WBEvent {
@@ -108,5 +110,4 @@ public struct WBEvent: WBData, Codable, Sendable {
         """
     }
 }
-
 

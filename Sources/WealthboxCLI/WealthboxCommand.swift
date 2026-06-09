@@ -106,10 +106,13 @@ struct Events: ParsableCommand {
     @Option(help: "Filter events to a Sunday-start week offset. Use 0 for this week, -1 for last week, and 1 for next week.")
     var week: Int?
 
+    @Flag(help: "Fetch event categories first and append each matching category object under category.")
+    var includeCategories = false
+
     @OptionGroup var options: ClientOptions
 
     func run() throws {
-        var events = try options.makeClient().getEvents()
+        var events = try options.makeClient().getEvents(includeCategories: includeCategories)
         if let week {
             events = try events.filteredByWeek(offset: week)
         }
