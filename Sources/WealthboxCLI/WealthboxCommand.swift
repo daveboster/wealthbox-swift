@@ -102,10 +102,16 @@ struct Events: ParsableCommand {
         abstract: "Fetch Wealthbox events."
     )
 
+    @Option(help: "Filter events to a Sunday-start week offset. Use 0 for this week, -1 for last week, and 1 for next week.")
+    var week: Int?
+
     @OptionGroup var options: ClientOptions
 
     func run() throws {
-        let events = try options.makeClient().getEvents()
+        var events = try options.makeClient().getEvents()
+        if let week {
+            events = try events.filteredByWeek(offset: week)
+        }
         try options.printJSON(events)
     }
 }

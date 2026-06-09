@@ -62,10 +62,15 @@ WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox me --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact 48828625 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --week 0 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event 77622943 --pretty
 ```
 
 The CLI is read-only in the first release.
+
+The `events --week <offset>` option filters fetched events by the event
+`starts_at` value. Weeks start on Sunday. Use `0` for the current week, `-1` for
+the week before, and `1` for the week after.
 
 ## Validation
 
