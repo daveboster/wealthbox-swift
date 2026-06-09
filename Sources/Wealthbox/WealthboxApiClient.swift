@@ -4,6 +4,7 @@ public enum FetchMethods: String, Sendable {
     case me = "/v1/me"
     case events = "/v1/events"
     case eventCategories = "/v1/categories/event_categories"
+    case customFields = "/v1/categories/custom_fields"
     case contacts = "/v1/contacts"
 }
 
@@ -56,8 +57,14 @@ public final class WealthboxApiClient: Sendable {
         try get(.eventCategories)
     }
 
-    public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil) throws -> T {
-        guard let url = URL(string: endpoint(method, id: id)) else {
+    public func getEventCustomFields() throws -> WBCustomFieldDefinitions {
+        try get(.customFields, queryItems: [
+            URLQueryItem(name: "document_type", value: "Event")
+        ])
+    }
+
+    public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
+        guard let url = endpoint(method, id: id, queryItems: queryItems) else {
             throw WealthboxError.internalError
         }
 
@@ -137,10 +144,19 @@ public final class WealthboxApiClient: Sendable {
         throw WealthboxError.internalError
     }
 
-    private func endpoint(_ method: FetchMethods, id: Int?) -> String {
-        guard let id else {
-            return "\(baseURL)\(method.rawValue)"
+    private func endpoint(_ method: FetchMethods, id: Int?, queryItems: [URLQueryItem]) -> URL? {
+        let path = endpointPath(method, id: id)
+        guard var components = URLComponents(string: "\(baseURL)\(path)") else {
+            return nil
         }
-        return "\(baseURL)\(method.rawValue)/\(id)"
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        return components.url
+    }
+
+    private func endpointPath(_ method: FetchMethods, id: Int?) -> String {
+        guard let id else {
+            return method.rawValue
+        }
+        return "\(method.rawValue)/\(id)"
     }
 }

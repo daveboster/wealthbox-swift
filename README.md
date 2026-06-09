@@ -65,6 +65,7 @@ WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --week 0 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event 77622943 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-categories --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --include-categories --pretty
 ```
 
@@ -77,6 +78,9 @@ the week before, and `1` for the week after.
 Use `event-categories` to fetch the event category id/name values from
 Wealthbox's customizable categories endpoint. Event records expose their
 category id as `event_category`.
+
+Use `event-custom-fields` to fetch the custom field definitions and available
+options for events from `/v1/categories/custom_fields?document_type=Event`.
 
 Use `events --include-categories` to fetch event categories before fetching
 events and append the matching category object under `category` in each event.

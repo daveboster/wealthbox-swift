@@ -62,6 +62,20 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getEventCustomFieldsUsesEventDocumentTypeQuery() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/categories/custom_fields?document_type=Event")
+            return makeJSONResponse(statusCode: 200, body: WBCustomFieldDefinitions.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let customFields = try client.getEventCustomFields()
+
+        #expect(customFields.customFields.first?.name == "Meeting Type")
+        #expect(customFields.customFields.first?.documentType == "Event")
+    }
+
+    @Test
     func getEventsWithCategoriesFetchesCategoriesBeforeEventsAndEnrichesResults() throws {
         nonisolated(unsafe) var requestedPaths: [String] = []
         let session = URLSession.stubbed { request in
