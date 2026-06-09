@@ -49,6 +49,19 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getEventCategoriesUsesCustomizableCategoryEndpoint() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/categories/event_categories")
+            return makeJSONResponse(statusCode: 200, body: WBEventCategories.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let categories = try client.getEventCategories()
+
+        #expect(categories.eventCategories.first?.name == "Client Meeting")
+    }
+
+    @Test
     func errorStatusCodesMapToWealthboxErrors() throws {
         try assertStatusCode(400, body: "Bad request body", mapsTo: .badRequest(message: "Bad request body"))
         try assertStatusCode(401, body: "Unauthorized body", mapsTo: .unauthorized(message: "Unauthorized body"))

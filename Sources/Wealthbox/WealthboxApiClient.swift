@@ -3,6 +3,7 @@ import Foundation
 public enum FetchMethods: String, Sendable {
     case me = "/v1/me"
     case events = "/v1/events"
+    case eventCategories = "/v1/categories/event_categories"
     case contacts = "/v1/contacts"
 }
 
@@ -43,6 +44,10 @@ public final class WealthboxApiClient: Sendable {
 
     public func getEvents() throws -> WBEvents {
         try get(.events)
+    }
+
+    public func getEventCategories() throws -> WBEventCategories {
+        try get(.eventCategories)
     }
 
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil) throws -> T {

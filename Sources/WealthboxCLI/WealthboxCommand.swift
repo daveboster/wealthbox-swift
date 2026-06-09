@@ -12,7 +12,8 @@ struct WealthboxCommand: ParsableCommand {
             Contacts.self,
             Contact.self,
             Events.self,
-            Event.self
+            Event.self,
+            EventCategories.self
         ]
     )
 }
@@ -130,5 +131,19 @@ struct Event: ParsableCommand {
     func run() throws {
         let event = try options.makeClient().getEvent(id: id)
         try options.printJSON(event)
+    }
+}
+
+struct EventCategories: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "event-categories",
+        abstract: "Fetch Wealthbox event category id/name values."
+    )
+
+    @OptionGroup var options: ClientOptions
+
+    func run() throws {
+        let categories = try options.makeClient().getEventCategories()
+        try options.printJSON(categories)
     }
 }
