@@ -76,11 +76,18 @@ struct Contacts: ParsableCommand {
         abstract: "Fetch Wealthbox contacts."
     )
 
+    @Option(help: "Filter by Wealthbox contact object type. Choices: Person, Household, Organization, Trust.")
+    var type: String?
+
+    @Option(help: "Filter by Wealthbox contact_type. Choices: Client, Past Client, Prospect, Vendor, Organization.")
+    var contactType: String?
+
     @OptionGroup var options: ClientOptions
 
     func run() throws {
         let contacts: WBContacts = try options.makeClient().get(.contacts)
-        try options.printJSON(contacts)
+        let filteredContacts = try contacts.filtered(type: type, contactType: contactType)
+        try options.printJSON(filteredContacts)
     }
 }
 

@@ -60,6 +60,7 @@ missing, it prompts silently. You can override the Keychain lookup with
 ```bash
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox me --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --type Person --contact-type Client --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact 48828625 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
@@ -78,6 +79,14 @@ The CLI is read-only except for explicit update commands.
 The `events --week <offset>` option filters fetched events by the event
 `starts_at` value. Weeks start on Sunday. Use `0` for the current week, `-1` for
 the week before, and `1` for the week after.
+
+Use `contacts --type <type>` to filter fetched contacts by Wealthbox `type`.
+Valid values are `Person`, `Household`, `Organization`, and `Trust`.
+
+Use `contacts --contact-type <contact_type>` to filter fetched contacts by
+Wealthbox `contact_type`. Valid values are `Client`, `Past Client`, `Prospect`,
+`Vendor`, and `Organization`. When both contact filters are passed, contacts
+must match both values.
 
 Use `event-categories` to fetch the event category id/name values from
 Wealthbox's customizable categories endpoint. Event records expose their
