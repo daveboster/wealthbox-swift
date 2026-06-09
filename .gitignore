@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+.swiftpm/
+
+# Local staging copied from the source project. Not part of the v1 package.
+import/
+
+# Local credentials and environment files.
+.tokenStub
+.env
+.env.*
+!.env.example
+
+# Xcode user state.
+xcuserdata/
+*.xcuserstate
