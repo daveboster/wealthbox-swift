@@ -39,6 +39,24 @@ The CLI reads an access token from `--token` or `WEALTHBOX_ACCESS_TOKEN`.
 `--base-url` or `WEALTHBOX_BASE_URL` can override the default
 `https://api.crmworkspace.com` endpoint.
 
+To avoid putting tokens in shell history, store the token in the macOS Keychain
+and source the checked-in helper:
+
+```bash
+security add-generic-password \
+  -U \
+  -s wealthbox-swift \
+  -a WEALTHBOX_ACCESS_TOKEN \
+  -w '<access-token>'
+
+source bin/load-wealthbox-token
+```
+
+`bin/load-wealthbox-token` exports `WEALTHBOX_ACCESS_TOKEN` into the current
+shell. If the token is already set, it leaves it alone. If the Keychain item is
+missing, it prompts silently. You can override the Keychain lookup with
+`WEALTHBOX_KEYCHAIN_SERVICE` and `WEALTHBOX_ACCESS_TOKEN_ACCOUNT`.
+
 ```bash
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox me --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --pretty
