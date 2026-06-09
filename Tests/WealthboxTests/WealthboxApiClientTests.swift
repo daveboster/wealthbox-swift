@@ -49,6 +49,40 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getContactsBuildsDocumentedFilterQueryParameters() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.path == "/v1/contacts")
+            let queryItems = Dictionary(
+                uniqueKeysWithValues: URLComponents(
+                    url: try #require(request.url),
+                    resolvingAgainstBaseURL: false
+                )?.queryItems?.map { ($0.name, $0.value) } ?? []
+            )
+            #expect(queryItems == [
+                "type": "person",
+                "contact_type": "Past Client",
+                "name": "Anderson",
+                "email": "kevin@example.com",
+                "phone": "(555) 123-4567",
+                "active": "true"
+            ])
+            return makeJSONResponse(statusCode: 200, body: WBContacts.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        _ = try client.getContacts(
+            filters: WBContactListFilters(
+                contactType: "Past Client",
+                name: "Anderson",
+                email: "kevin@example.com",
+                phone: "(555) 123-4567",
+                active: true,
+                type: "Person"
+            )
+        )
+    }
+
+    @Test
     func getEventCategoriesUsesCustomizableCategoryEndpoint() throws {
         let session = URLSession.stubbed { request in
             #expect(request.url?.absoluteString == "https://example.com/v1/categories/event_categories")

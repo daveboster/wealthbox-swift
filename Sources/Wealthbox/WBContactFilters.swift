@@ -33,7 +33,7 @@ public extension WBContacts {
         return WBContacts(filteredContacts, page: page, perPage: perPage)
     }
 
-    private static func normalizedValue(_ value: String, allowedValues: [String], fieldName: String) throws -> String {
+    static func normalizedValue(_ value: String, allowedValues: [String], fieldName: String) throws -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if let match = allowedValues.first(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return match

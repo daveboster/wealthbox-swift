@@ -82,12 +82,32 @@ struct Contacts: ParsableCommand {
     @Option(help: "Filter by Wealthbox contact_type. Choices: Client, Past Client, Prospect, Vendor, Organization.")
     var contactType: String?
 
+    @Option(help: "Filter by contact name.")
+    var name: String?
+
+    @Option(help: "Filter by contact email.")
+    var email: String?
+
+    @Option(help: "Filter by contact phone number.")
+    var phone: String?
+
+    @Option(help: "Filter by active flag. Pass true or false.")
+    var active: Bool?
+
     @OptionGroup var options: ClientOptions
 
     func run() throws {
-        let contacts: WBContacts = try options.makeClient().get(.contacts)
-        let filteredContacts = try contacts.filtered(type: type, contactType: contactType)
-        try options.printJSON(filteredContacts)
+        let contacts = try options.makeClient().getContacts(
+            filters: WBContactListFilters(
+                contactType: contactType,
+                name: name,
+                email: email,
+                phone: phone,
+                active: active,
+                type: type
+            )
+        )
+        try options.printJSON(contacts)
     }
 }
 

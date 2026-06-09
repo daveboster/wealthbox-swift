@@ -61,6 +61,7 @@ missing, it prompts silently. You can override the Keychain lookup with
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox me --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --type Person --contact-type Client --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contacts --name Anderson --email kevin@example.com --phone "(555) 123-4567" --active true --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact 48828625 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox contact-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
@@ -80,13 +81,17 @@ The `events --week <offset>` option filters fetched events by the event
 `starts_at` value. Weeks start on Sunday. Use `0` for the current week, `-1` for
 the week before, and `1` for the week after.
 
-Use `contacts --type <type>` to filter fetched contacts by Wealthbox `type`.
-Valid values are `Person`, `Household`, `Organization`, and `Trust`.
+Use `contacts --type <type>` to filter contacts by Wealthbox `type`.
+Valid values are `Person`, `Household`, `Organization`, and `Trust`. This is
+sent to the API as the documented lowercase `type` parameter.
 
-Use `contacts --contact-type <contact_type>` to filter fetched contacts by
+Use `contacts --contact-type <contact_type>` to filter contacts by
 Wealthbox `contact_type`. Valid values are `Client`, `Past Client`, `Prospect`,
-`Vendor`, and `Organization`. When both contact filters are passed, contacts
-must match both values.
+`Vendor`, and `Organization`.
+
+Use `contacts --name <name>`, `--email <email>`, `--phone <phone>`, and
+`--active <true|false>` to pass the documented contact search parameters to the
+API. Contact filters can be used individually or combined.
 
 Use `event-categories` to fetch the event category id/name values from
 Wealthbox's customizable categories endpoint. Event records expose their

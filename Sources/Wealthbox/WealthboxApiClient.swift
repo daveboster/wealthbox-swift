@@ -54,6 +54,10 @@ public final class WealthboxApiClient: Sendable {
         return try get(.events)
     }
 
+    public func getContacts(filters: WBContactListFilters = WBContactListFilters()) throws -> WBContacts {
+        try get(.contacts, queryItems: filters.queryItems())
+    }
+
     public func getEventCategories() throws -> WBEventCategories {
         try get(.eventCategories)
     }
