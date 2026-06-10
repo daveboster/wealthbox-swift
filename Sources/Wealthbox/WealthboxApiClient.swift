@@ -44,14 +44,14 @@ public final class WealthboxApiClient: Sendable {
         try get(.events, id: id)
     }
 
-    public func getEvents(includeCategories: Bool = false) throws -> WBEvents {
+    public func getEvents(filters: WBEventListFilters = WBEventListFilters(), includeCategories: Bool = false) throws -> WBEvents {
         if includeCategories {
             let categories = try getEventCategories()
-            let events: WBEvents = try get(.events)
+            let events: WBEvents = try get(.events, queryItems: filters.queryItems())
             return events.enrichedWithCategories(categories)
         }
 
-        return try get(.events)
+        return try get(.events, queryItems: filters.queryItems())
     }
 
     public func getContacts(filters: WBContactListFilters = WBContactListFilters()) throws -> WBContacts {

@@ -121,6 +121,46 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func getEventsBuildsDocumentedStartDateFilterQueryParameters() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.path == "/v1/events")
+            let queryItems = Dictionary(
+                uniqueKeysWithValues: URLComponents(
+                    url: try #require(request.url),
+                    resolvingAgainstBaseURL: false
+                )?.queryItems?.map { ($0.name, $0.value) } ?? []
+            )
+            #expect(queryItems == [
+                "start_date_min": "2026-06-01",
+                "start_date_max": "2026-06-30"
+            ])
+            return makeJSONResponse(statusCode: 200, body: WBEvents.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        _ = try client.getEvents(filters: WBEventListFilters(fromDate: "2026-06-01", untilDate: "2026-06-30"))
+    }
+
+    @Test
+    func getEventsRejectsInvalidStartDateBeforeRequesting() throws {
+        nonisolated(unsafe) var requestCount = 0
+        let session = URLSession.stubbed { request in
+            requestCount += 1
+            return makeJSONResponse(statusCode: 500, body: "Request should not be sent", request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        do {
+            _ = try client.getEvents(filters: WBEventListFilters(fromDate: "06/01/2026"))
+            Issue.record("Expected invalid from date to throw.")
+        } catch let error as WealthboxError {
+            #expect(error == .validationError(message: "Invalid from date '06/01/2026'. Use YYYY-MM-DD format."))
+        }
+
+        #expect(requestCount == 0)
+    }
+
+    @Test
     func getEventsWithCategoriesFetchesCategoriesBeforeEventsAndEnrichesResults() throws {
         nonisolated(unsafe) var requestedPaths: [String] = []
         let session = URLSession.stubbed { request in
