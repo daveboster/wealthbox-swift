@@ -32,4 +32,22 @@ struct WealthboxErrorTests {
         #expect(WealthboxError.rateLimited(retryAfter: 30).errorDescription == "Too Many Requests.")
         #expect(WealthboxError.network(message: "offline").errorDescription == "A network error occurred.")
     }
+
+    @Test
+    func failureReasonDoesNotEchoRawServerResponseBody() {
+        // Server response bodies can contain client PII; they must not surface
+        // through the user-facing/loggable LocalizedError text.
+        let sensitive = "passport_number=AB1234CD contact=Jane Doe"
+        #expect(WealthboxError.badRequest(message: sensitive).failureReason?.contains(sensitive) != true)
+        #expect(WealthboxError.unauthorized(message: sensitive).failureReason?.contains(sensitive) != true)
+        #expect(WealthboxError.internalServerError(message: sensitive).failureReason?.contains(sensitive) != true)
+        #expect(WealthboxError.serverError(code: 422, message: sensitive).failureReason?.contains(sensitive) != true)
+        // The raw message stays available on the associated value for
+        // deliberate, non-user-facing use.
+        if case let .badRequest(message) = WealthboxError.badRequest(message: sensitive) {
+            #expect(message == sensitive)
+        } else {
+            Issue.record("Expected .badRequest to retain its associated message.")
+        }
+    }
 }

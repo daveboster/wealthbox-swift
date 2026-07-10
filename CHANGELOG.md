@@ -23,6 +23,10 @@ within the same minor version.
   and now surface as `.network(message:)`.
 - Added `WealthboxError.isRetriable` and `WealthboxError.retryAfterSeconds`
   helpers for user-facing retry flows.
+- Hardened `WealthboxError.failureReason` so it no longer echoes raw server
+  response bodies (which may contain client PII) into user-facing/loggable
+  error text; the raw message remains on the case's associated value for
+  deliberate, non-user-facing use.
 - Added Swift Testing coverage for contact-search query construction, note
   creation (request body and response decoding), 429 rate-limit handling, and
   error classification.

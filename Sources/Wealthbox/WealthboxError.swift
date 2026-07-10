@@ -28,42 +28,33 @@ public enum WealthboxError: LocalizedError, Equatable {
         }
     }
 
+    /// A user-facing reason for the failure.
+    ///
+    /// This intentionally returns category-level text and never the raw server
+    /// response body. Wealthbox responses can contain client PII, and this
+    /// value is commonly surfaced in `LocalizedError` alerts and logs; the raw
+    /// message stays on the case's associated value for deliberate,
+    /// non-user-facing use.
     public var failureReason: String? {
         switch self {
         case .internalError:
             return "The app encountered an unexpected condition."
-        case .network(let message):
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty
-                ? "The request could not reach the server."
-                : message
-        case .serverError(_, let message):
-            if let message, !message.isEmpty {
-                return message
-            } else {
-                return "The server responded with an error status."
-            }
-        case .badRequest(let message):
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty
-                ? "The server could not understand the request due to invalid syntax."
-                : message
-        case .unauthorized(let message):
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty
-                ? "Unauthorized. Access is denied due to invalid credentials."
-                : message
+        case .network:
+            return "The request could not reach the server."
+        case .serverError(let code, _):
+            return "The server responded with an error status (\(code))."
+        case .badRequest:
+            return "The server could not understand the request due to invalid syntax."
+        case .unauthorized:
+            return "Access is denied due to invalid credentials."
         case .rateLimited(let retryAfter):
             if let retryAfter {
                 return "Too many requests were sent. Retry after \(retryAfter) seconds."
             } else {
                 return "Too many requests were sent in a short period."
             }
-        case .internalServerError(let message):
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty
-                ? "The server has encountered a situation it doesn't know how to handle."
-                : message
+        case .internalServerError:
+            return "The server has encountered a situation it doesn't know how to handle."
         }
     }
 
