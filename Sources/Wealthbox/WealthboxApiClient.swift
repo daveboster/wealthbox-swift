@@ -3,12 +3,15 @@ import Foundation
 public enum FetchMethods: String, Sendable {
     case me = "/v1/me"
     case events = "/v1/events"
+    case eventCategories = "/v1/categories/event_categories"
+    case customFields = "/v1/categories/custom_fields"
     case contacts = "/v1/contacts"
     case notes = "/v1/notes"
 }
 
 public final class WealthboxApiClient: Sendable {
     public static let defaultBaseUrl = "https://api.crmworkspace.com"
+    public static let eventStates = ["unconfirmed", "confirmed", "tentative", "completed", "cancelled"]
 
     private let baseURL: String
     private let accessToken: String?
@@ -46,8 +49,64 @@ public final class WealthboxApiClient: Sendable {
         try get(.events, id: id)
     }
 
-    public func getEvents() throws -> WBEvents {
-        try get(.events)
+    public func getEvents(filters: WBEventListFilters = WBEventListFilters(), includeCategories: Bool = false) throws -> WBEvents {
+        if includeCategories {
+            let categories = try getEventCategories()
+            let events: WBEvents = try get(.events, queryItems: filters.queryItems())
+            return events.enrichedWithCategories(categories)
+        }
+
+        return try get(.events, queryItems: filters.queryItems())
+    }
+
+    public func getEventCategories() throws -> WBEventCategories {
+        try get(.eventCategories)
+    }
+
+    public func getEventCustomFields() throws -> WBCustomFieldDefinitions {
+        try getCustomFields(documentType: "Event")
+    }
+
+    public func getContactCustomFields() throws -> WBCustomFieldDefinitions {
+        try getCustomFields(documentType: "Contact")
+    }
+
+    public func updateEventCategory(eventId: Int, fromCategoryId: Int, toCategoryId: Int) throws -> WBEvent {
+        let event = try getEvent(id: eventId)
+        guard event.eventCategory == fromCategoryId else {
+            throw WealthboxError.validationError(
+                message: "Event \(eventId) has event_category \(event.eventCategory?.description ?? "nil"), expected \(fromCategoryId). No update sent."
+            )
+        }
+
+        let body = try WBEventUpdateRequest(event: event, eventCategory: toCategoryId)
+        return try put(.events, id: eventId, body: body)
+    }
+
+    public func updateEventCategory(eventId: Int, fromCategoryName: String, toCategoryName: String) throws -> WBEvent {
+        let categories = try getEventCategories()
+        let fromCategory = try resolveEventCategory(named: fromCategoryName, in: categories)
+        let toCategory = try resolveEventCategory(named: toCategoryName, in: categories)
+        return try updateEventCategory(eventId: eventId, fromCategoryId: fromCategory.id, toCategoryId: toCategory.id)
+    }
+
+    public func updateEventState(eventId: Int, fromState: String, toState: String) throws -> WBEvent {
+        let normalizedFromState = try normalizedEventState(fromState)
+        let normalizedToState = try normalizedEventState(toState)
+        let event = try getEvent(id: eventId)
+        let currentState = event.state ?? "nil"
+        guard currentState.caseInsensitiveCompare(normalizedFromState) == .orderedSame else {
+            throw WealthboxError.validationError(
+                message: "Event \(eventId) has state '\(currentState)', expected '\(normalizedFromState)'. No update sent."
+            )
+        }
+
+        let body = try WBEventUpdateRequest(
+            event: event,
+            eventCategory: event.eventCategory,
+            state: normalizedToState
+        )
+        return try put(.events, id: eventId, body: body)
     }
 
     // MARK: - Contacts
@@ -55,6 +114,11 @@ public final class WealthboxApiClient: Sendable {
     /// Fetches a single contact by its Wealthbox identifier.
     public func getContact(id: Int) throws -> WBContact {
         try get(.contacts, id: id)
+    }
+
+    /// Fetches contacts using the documented `GET /v1/contacts` list filters.
+    public func getContacts(filters: WBContactListFilters = WBContactListFilters()) throws -> WBContacts {
+        try get(.contacts, queryItems: filters.queryItems())
     }
 
     /// Searches contacts using Wealthbox's documented `GET /v1/contacts` query
@@ -107,11 +171,8 @@ public final class WealthboxApiClient: Sendable {
             linkedTo: linkedTo.isEmpty ? nil : linkedTo,
             visibleTo: visibleTo
         )
-        let httpBody = try JSONEncoder().encode(requestBody)
-        let url = try makeURL(path: endpoint(.notes, id: nil), queryItems: [])
-        let request = makeRequest(method: "POST", url: url, body: httpBody)
-        let responseBody = try perform(request)
-        return try WBNote.decode(responseBody)
+        let data = try JSONEncoder().encode(requestBody)
+        return try send(.notes, httpMethod: "POST", body: data)
     }
 
     /// Convenience for the common case of linking a new note to a single contact.
@@ -120,44 +181,30 @@ public final class WealthboxApiClient: Sendable {
         try createNote(content: content, linkedTo: [WBNoteLink(id: contactId, type: "Contact")])
     }
 
-    // MARK: - Generic GET
+    // MARK: - Generic requests
 
-    public func get<T: WBData>(
+    public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
+        try send(method, id: id, queryItems: queryItems, httpMethod: "GET", body: Optional<Data>.none)
+    }
+
+    private func put<T: WBData, Body: Encodable>(_ method: FetchMethods, id: Int? = nil, body: Body) throws -> T {
+        let data = try JSONEncoder().encode(body)
+        return try send(method, id: id, httpMethod: "PUT", body: data)
+    }
+
+    private func send<T: WBData>(
         _ method: FetchMethods,
         id: Int? = nil,
-        queryItems: [URLQueryItem] = []
+        queryItems: [URLQueryItem] = [],
+        httpMethod: String,
+        body: Data?
     ) throws -> T {
-        let url = try makeURL(path: endpoint(method, id: id), queryItems: queryItems)
-        let request = makeRequest(method: "GET", url: url, body: nil)
-        let responseBody = try perform(request)
-        return try T.decode(responseBody) as! T
-    }
-
-    // MARK: - Request plumbing
-
-    private func endpoint(_ method: FetchMethods, id: Int?) -> String {
-        guard let id else {
-            return "\(baseURL)\(method.rawValue)"
-        }
-        return "\(baseURL)\(method.rawValue)/\(id)"
-    }
-
-    private func makeURL(path: String, queryItems: [URLQueryItem]) throws -> URL {
-        guard var components = URLComponents(string: path) else {
+        guard let url = endpoint(method, id: id, queryItems: queryItems) else {
             throw WealthboxError.internalError
         }
-        if !queryItems.isEmpty {
-            components.queryItems = queryItems
-        }
-        guard let url = components.url else {
-            throw WealthboxError.internalError
-        }
-        return url
-    }
 
-    private func makeRequest(method: String, url: URL, body: Data?) -> URLRequest {
         var request = URLRequest(url: url)
-        request.httpMethod = method
+        request.httpMethod = httpMethod
         if let accessToken {
             request.setValue(accessToken, forHTTPHeaderField: "ACCESS_TOKEN")
         }
@@ -166,10 +213,7 @@ public final class WealthboxApiClient: Sendable {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        return request
-    }
 
-    private func perform(_ request: URLRequest) throws -> String {
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
 
@@ -237,16 +281,64 @@ public final class WealthboxApiClient: Sendable {
             throw capturedError
         }
         if let capturedBody {
-            return capturedBody
+            return try T.decode(capturedBody) as! T
         }
         throw WealthboxError.internalError
     }
+
+    // MARK: - Request plumbing
 
     private static func retryAfterSeconds(from response: HTTPURLResponse) -> Int? {
         guard let value = response.value(forHTTPHeaderField: "Retry-After") else {
             return nil
         }
         return Int(value.trimmingCharacters(in: .whitespaces))
+    }
+
+    private func resolveEventCategory(named name: String, in categories: WBEventCategories) throws -> WBCategoryMember {
+        let matches = categories.eventCategories.filter {
+            $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }
+
+        if matches.count == 1, let match = matches.first {
+            return match
+        }
+        if matches.isEmpty {
+            throw WealthboxError.validationError(message: "No event category named '\(name)' was found. No update sent.")
+        }
+        throw WealthboxError.validationError(message: "Multiple event categories named '\(name)' were found. No update sent.")
+    }
+
+    private func normalizedEventState(_ state: String) throws -> String {
+        let normalized = state.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard Self.eventStates.contains(normalized) else {
+            throw WealthboxError.validationError(
+                message: "Invalid event state '\(state)'. Use one of: \(Self.eventStates.joined(separator: ", "))."
+            )
+        }
+        return normalized
+    }
+
+    private func getCustomFields(documentType: String) throws -> WBCustomFieldDefinitions {
+        try get(.customFields, queryItems: [
+            URLQueryItem(name: "document_type", value: documentType)
+        ])
+    }
+
+    private func endpoint(_ method: FetchMethods, id: Int?, queryItems: [URLQueryItem]) -> URL? {
+        let path = endpointPath(method, id: id)
+        guard var components = URLComponents(string: "\(baseURL)\(path)") else {
+            return nil
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        return components.url
+    }
+
+    private func endpointPath(_ method: FetchMethods, id: Int?) -> String {
+        guard let id else {
+            return method.rawValue
+        }
+        return "\(method.rawValue)/\(id)"
     }
 }
 

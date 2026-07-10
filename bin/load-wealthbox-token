@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+# load-wealthbox-token
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  printf 'Source this script so it can export variables into your shell:\n' >&2
+  printf '  source bin/load-wealthbox-token\n' >&2
+  exit 1
+fi
+
+wealthbox_keychain_service="${WEALTHBOX_KEYCHAIN_SERVICE:-wealthbox-swift}"
+wealthbox_access_token_account="${WEALTHBOX_ACCESS_TOKEN_ACCOUNT:-WEALTHBOX_ACCESS_TOKEN}"
+
+wealthbox_read_keychain_password() {
+  local account="$1"
+
+  if ! command -v security >/dev/null 2>&1; then
+    return 1
+  fi
+
+  security find-generic-password \
+    -s "$wealthbox_keychain_service" \
+    -a "$account" \
+    -w 2>/dev/null
+}
+
+wealthbox_prompt_secret() {
+  local prompt="$1"
+  local value
+
+  printf '%s' "$prompt" >&2
+  IFS= read -r -s value
+  printf '\n' >&2
+  printf '%s\n' "$value"
+}
+
+if [[ -z "${WEALTHBOX_ACCESS_TOKEN:-}" ]]; then
+  if ! WEALTHBOX_ACCESS_TOKEN="$(wealthbox_read_keychain_password "$wealthbox_access_token_account")"; then
+    WEALTHBOX_ACCESS_TOKEN="$(wealthbox_prompt_secret 'WEALTHBOX_ACCESS_TOKEN: ')"
+  fi
+  export WEALTHBOX_ACCESS_TOKEN
+fi
+
+unset -f wealthbox_read_keychain_password
+unset -f wealthbox_prompt_secret
+unset wealthbox_keychain_service
+unset wealthbox_access_token_account
