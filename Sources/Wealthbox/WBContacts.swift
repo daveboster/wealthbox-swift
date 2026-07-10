@@ -14,8 +14,10 @@ public struct WBContacts: WBData, Codable {
     public var page: Int?
     public var perPage: Int?
     
-    public init(_ contacts: [WBContact]) {
+    public init(_ contacts: [WBContact], page: Int? = nil, perPage: Int? = nil) {
         self.contacts = contacts
+        self.page = page
+        self.perPage = perPage
     }
     
     private enum CodingKeys: String, CodingKey {

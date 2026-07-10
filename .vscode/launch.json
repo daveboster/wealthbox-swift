@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:wealthbox-swift}",
+            "name": "Debug wealthbox",
+            "target": "wealthbox",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug wealthbox"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:wealthbox-swift}",
+            "name": "Release wealthbox",
+            "target": "wealthbox",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release wealthbox"
+        }
+    ]
+}
