@@ -38,6 +38,19 @@ struct ModelDecodingTests {
     }
 
     @Test
+    func noteSampleDecodesExpectedContentAndLinks() throws {
+        let note = WBNote.sample()
+
+        #expect(note.id == 1)
+        #expect(note.content == "Spoke with Kevin about the upcoming review meeting.")
+        #expect(note.visibleTo == "Everyone")
+        #expect(note.linkedTo?.first?.type == "Contact")
+        #expect(note.linkedTo?.first?.name == "Kevin Anderson")
+        #expect(note.tags?.first?.name == "Meeting")
+        #expect(note.json?.contains("\"content\"") == true)
+    }
+
+    @Test
     func wealthboxItemTypeClassifiesKnownContacts() throws {
         let contact = WBContact.sample()
 

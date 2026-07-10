@@ -5,7 +5,9 @@ import PackageDescription
 let package = Package(
     name: "wealthbox-swift",
     platforms: [
-        .macOS("14.0")
+        .macOS("14.0"),
+        .iOS("17.0"),
+        .macCatalyst("17.0")
     ],
     products: [
         .library(name: "Wealthbox", targets: ["Wealthbox"]),
