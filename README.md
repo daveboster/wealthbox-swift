@@ -1,19 +1,20 @@
 # Wealthbox Swift
 
-`wealthbox-swift` is a Swift package for read-only Wealthbox API access from
-Swift apps and terminal workflows.
+`wealthbox-swift` is a Swift package for Wealthbox API access from Swift apps
+and terminal workflows. Reads cover the current user/workspace, contacts, and
+events; the library also supports creating notes (`POST /v1/notes`).
 
-The package currently exposes a Foundation-only library product named
-`Wealthbox` and a command-line executable named `wealthbox`. SwiftUI and
-SwiftData views copied into the local `import/` staging folder are intentionally
-not part of the first public package surface.
+The package exposes a Foundation-only library product named `Wealthbox` and a
+command-line executable named `wealthbox`. It builds for macOS, iOS, iPadOS, and
+Mac Catalyst. SwiftUI and SwiftData views copied into the local `import/` staging
+folder are intentionally not part of the first public package surface.
 
 ## Package
 
 Use Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/daveboster/wealthbox-swift.git", exact: "0.1.0-alpha.1")
+.package(url: "https://github.com/daveboster/wealthbox-swift.git", exact: "0.1.0-alpha.2")
 ```
 
 The library product is `Wealthbox`.
@@ -22,9 +23,21 @@ The library product is `Wealthbox`.
 import Wealthbox
 
 let client = WealthboxApiClient(accessToken: "<access-token>")
+
+// Reads
 let workspace = try client.getCurrentUser()
-let contacts: WBContacts = try client.get(.contacts)
+let contacts: WBContacts = try client.searchContacts(name: "Anderson")
 let event = try client.getEvent(id: 123)
+
+// Write: create a note linked to a contact
+let note = try client.createNote(content: "Reviewed the plan.", contactId: 48828625)
+
+// Typed errors for retry flows
+do {
+    _ = try client.getCurrentUser()
+} catch let error as WealthboxError where error.isRetriable {
+    // retry, honoring error.retryAfterSeconds when present
+}
 ```
 
 ## CLI

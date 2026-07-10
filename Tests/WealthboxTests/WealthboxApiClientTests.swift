@@ -49,6 +49,92 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func searchContactsBuildsExpectedQueryParameters() throws {
+        let session = URLSession.stubbed { request in
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            #expect(components?.path == "/v1/contacts")
+            let items = Dictionary(
+                uniqueKeysWithValues: (components?.queryItems ?? []).compactMap { item -> (String, String)? in
+                    guard let value = item.value else { return nil }
+                    return (item.name, value)
+                }
+            )
+            #expect(items["name"] == "Anderson")
+            #expect(items["email"] == "kevin@example.com")
+            #expect(items["type"] == "household")
+            #expect(items["active"] == "true")
+            #expect(items["page"] == "2")
+            #expect(items["per_page"] == "50")
+            return makeJSONResponse(statusCode: 200, body: WBContacts.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let contacts = try client.searchContacts(
+            name: "Anderson",
+            email: "kevin@example.com",
+            type: "household",
+            active: true,
+            page: 2,
+            perPage: 50
+        )
+
+        #expect(contacts.contacts.count == 1)
+    }
+
+    @Test
+    func createNotePostsExpectedBodyAndDecodesResponse() throws {
+        let expectedToken = "token-abc"
+        nonisolated(unsafe) var capturedBody: [String: Any]?
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/notes")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "ACCESS_TOKEN") == expectedToken)
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            if let data = requestBodyData(from: request) {
+                capturedBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            return makeJSONResponse(statusCode: 201, body: WBNote.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session, accessToken: expectedToken)
+
+        let note = try client.createNote(
+            content: "Reviewed the plan with the household.",
+            linkedTo: [WBNoteLink(id: 42, type: "Contact")],
+            visibleTo: "Everyone"
+        )
+
+        #expect(note.id == 1)
+        #expect(note.content == "Spoke with Kevin about the upcoming review meeting.")
+        #expect(capturedBody?["content"] as? String == "Reviewed the plan with the household.")
+        #expect(capturedBody?["visible_to"] as? String == "Everyone")
+        let linked = capturedBody?["linked_to"] as? [[String: Any]]
+        #expect(linked?.count == 1)
+        #expect(linked?.first?["id"] as? Int == 42)
+        #expect(linked?.first?["type"] as? String == "Contact")
+    }
+
+    @Test
+    func createNoteConvenienceLinksSingleContactAndOmitsEmptyFields() throws {
+        nonisolated(unsafe) var capturedBody: [String: Any]?
+        let session = URLSession.stubbed { request in
+            if let data = requestBodyData(from: request) {
+                capturedBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            return makeJSONResponse(statusCode: 201, body: WBNote.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        _ = try client.createNote(content: "Called client.", contactId: 7)
+
+        #expect(capturedBody?["content"] as? String == "Called client.")
+        // visible_to is nil and must be omitted, not sent as null.
+        #expect(capturedBody?.keys.contains("visible_to") == false)
+        let linked = capturedBody?["linked_to"] as? [[String: Any]]
+        #expect(linked?.first?["id"] as? Int == 7)
+        #expect(linked?.first?["type"] as? String == "Contact")
+    }
+
+    @Test
     func getContactsBuildsDocumentedFilterQueryParameters() throws {
         let session = URLSession.stubbed { request in
             #expect(request.url?.path == "/v1/contacts")
@@ -353,12 +439,36 @@ struct WealthboxApiClientTests {
     func errorStatusCodesMapToWealthboxErrors() throws {
         try assertStatusCode(400, body: "Bad request body", mapsTo: .badRequest(message: "Bad request body"))
         try assertStatusCode(401, body: "Unauthorized body", mapsTo: .unauthorized(message: "Unauthorized body"))
+        try assertStatusCode(429, body: "Too many requests", mapsTo: .rateLimited(retryAfter: nil))
         try assertStatusCode(500, body: "Server exploded", mapsTo: .internalServerError(message: "Server exploded"))
         try assertStatusCode(418, body: "Teapot", mapsTo: .serverError(code: 418, message: "Teapot"))
     }
 
     @Test
-    func transportErrorsMapToServerErrorMinusOne() throws {
+    func rateLimitedParsesRetryAfterHeader() throws {
+        let session = URLSession.stubbed { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 429,
+                httpVersion: nil,
+                headerFields: ["Retry-After": "30"]
+            )!
+            return (response, Data("slow down".utf8))
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        do {
+            _ = try client.getCurrentUser()
+            Issue.record("Expected 429 to throw.")
+        } catch let error as WealthboxError {
+            #expect(error == .rateLimited(retryAfter: 30))
+            #expect(error.retryAfterSeconds == 30)
+            #expect(error.isRetriable)
+        }
+    }
+
+    @Test
+    func transportErrorsMapToNetworkError() throws {
         let session = URLSession.stubbed { _ in
             throw NSError(
                 domain: NSURLErrorDomain,
@@ -372,7 +482,8 @@ struct WealthboxApiClientTests {
             _ = try client.getCurrentUser()
             Issue.record("Expected getCurrentUser to throw.")
         } catch let error as WealthboxError {
-            #expect(error == .serverError(code: -1, message: "Simulated offline"))
+            #expect(error == .network(message: "Simulated offline"))
+            #expect(error.isRetriable)
         }
     }
 

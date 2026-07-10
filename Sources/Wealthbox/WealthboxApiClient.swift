@@ -6,6 +6,7 @@ public enum FetchMethods: String, Sendable {
     case eventCategories = "/v1/categories/event_categories"
     case customFields = "/v1/categories/custom_fields"
     case contacts = "/v1/contacts"
+    case notes = "/v1/notes"
 }
 
 public final class WealthboxApiClient: Sendable {
@@ -36,9 +37,13 @@ public final class WealthboxApiClient: Sendable {
         self.accessToken = accessToken
     }
 
+    // MARK: - Current user
+
     public func getCurrentUser() throws -> Workspace {
         try get(.me)
     }
+
+    // MARK: - Events
 
     public func getEvent(id: Int) throws -> WBEvent {
         try get(.events, id: id)
@@ -52,10 +57,6 @@ public final class WealthboxApiClient: Sendable {
         }
 
         return try get(.events, queryItems: filters.queryItems())
-    }
-
-    public func getContacts(filters: WBContactListFilters = WBContactListFilters()) throws -> WBContacts {
-        try get(.contacts, queryItems: filters.queryItems())
     }
 
     public func getEventCategories() throws -> WBEventCategories {
@@ -108,6 +109,80 @@ public final class WealthboxApiClient: Sendable {
         return try put(.events, id: eventId, body: body)
     }
 
+    // MARK: - Contacts
+
+    /// Fetches a single contact by its Wealthbox identifier.
+    public func getContact(id: Int) throws -> WBContact {
+        try get(.contacts, id: id)
+    }
+
+    /// Fetches contacts using the documented `GET /v1/contacts` list filters.
+    public func getContacts(filters: WBContactListFilters = WBContactListFilters()) throws -> WBContacts {
+        try get(.contacts, queryItems: filters.queryItems())
+    }
+
+    /// Searches contacts using Wealthbox's documented `GET /v1/contacts` query
+    /// parameters.
+    ///
+    /// `name` supports partial matches. `type` accepts the documented values
+    /// `person`, `household`, `organization`, or `trust`. Every parameter is
+    /// optional; passing none returns the first page of all contacts. Persons,
+    /// households, and organizations are all contacts and are all searchable
+    /// here.
+    public func searchContacts(
+        name: String? = nil,
+        email: String? = nil,
+        type: String? = nil,
+        active: Bool? = nil,
+        page: Int? = nil,
+        perPage: Int? = nil
+    ) throws -> WBContacts {
+        var queryItems: [URLQueryItem] = []
+        if let name { queryItems.append(URLQueryItem(name: "name", value: name)) }
+        if let email { queryItems.append(URLQueryItem(name: "email", value: email)) }
+        if let type { queryItems.append(URLQueryItem(name: "type", value: type)) }
+        if let active { queryItems.append(URLQueryItem(name: "active", value: active ? "true" : "false")) }
+        if let page { queryItems.append(URLQueryItem(name: "page", value: String(page))) }
+        if let perPage { queryItems.append(URLQueryItem(name: "per_page", value: String(perPage))) }
+        return try get(.contacts, queryItems: queryItems)
+    }
+
+    // MARK: - Notes (write)
+
+    /// Creates a note via `POST /v1/notes`, optionally linking it to Wealthbox
+    /// records.
+    ///
+    /// - Parameters:
+    ///   - content: The note body text.
+    ///   - linkedTo: Records to attach the note to. Linking by a contact's own
+    ///     id with `type: "Contact"` works for people, households, and
+    ///     organizations, since all are contacts; callers that need a more
+    ///     specific `linked_to` type (confirmed against the live Wealthbox API)
+    ///     can set it explicitly via `WBNoteLink(id:type:)`.
+    ///   - visibleTo: Optional visibility (e.g. `"Everyone"`, `"Private"`).
+    @discardableResult
+    public func createNote(
+        content: String,
+        linkedTo: [WBNoteLink] = [],
+        visibleTo: String? = nil
+    ) throws -> WBNote {
+        let requestBody = WBNoteCreateRequest(
+            content: content,
+            linkedTo: linkedTo.isEmpty ? nil : linkedTo,
+            visibleTo: visibleTo
+        )
+        let data = try JSONEncoder().encode(requestBody)
+        return try send(.notes, httpMethod: "POST", body: data)
+    }
+
+    /// Convenience for the common case of linking a new note to a single contact.
+    @discardableResult
+    public func createNote(content: String, contactId: Int) throws -> WBNote {
+        try createNote(content: content, linkedTo: [WBNoteLink(id: contactId, type: "Contact")])
+    }
+
+    // MARK: - Generic requests
+
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
         try send(method, id: id, queryItems: queryItems, httpMethod: "GET", body: Optional<Data>.none)
     }
@@ -156,7 +231,7 @@ public final class WealthboxApiClient: Sendable {
             }
 
             if let error {
-                capture(error: .serverError(code: -1, message: error.localizedDescription))
+                capture(error: .network(message: error.localizedDescription))
                 return
             }
 
@@ -173,6 +248,9 @@ public final class WealthboxApiClient: Sendable {
                 return
             case 401:
                 capture(error: .unauthorized(message: bodyString ?? "Unauthorized. Access is denied due to invalid credentials."))
+                return
+            case 429:
+                capture(error: .rateLimited(retryAfter: Self.retryAfterSeconds(from: httpResponse)))
                 return
             case 500:
                 capture(error: .internalServerError(message: bodyString ?? "The server has encountered a situation it doesn't know how to handle."))
@@ -206,6 +284,15 @@ public final class WealthboxApiClient: Sendable {
             return try T.decode(capturedBody) as! T
         }
         throw WealthboxError.internalError
+    }
+
+    // MARK: - Request plumbing
+
+    private static func retryAfterSeconds(from response: HTTPURLResponse) -> Int? {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After") else {
+            return nil
+        }
+        return Int(value.trimmingCharacters(in: .whitespaces))
     }
 
     private func resolveEventCategory(named name: String, in categories: WBEventCategories) throws -> WBCategoryMember {
@@ -252,5 +339,23 @@ public final class WealthboxApiClient: Sendable {
             return method.rawValue
         }
         return "\(method.rawValue)/\(id)"
+    }
+}
+
+// MARK: - Request bodies
+
+/// Encodable request body for `POST /v1/notes`.
+///
+/// `nil` optionals are omitted from the encoded JSON, so a note with no links
+/// or explicit visibility sends only `content`.
+struct WBNoteCreateRequest: Encodable {
+    let content: String
+    let linkedTo: [WBNoteLink]?
+    let visibleTo: String?
+
+    enum CodingKeys: String, CodingKey {
+        case content
+        case linkedTo = "linked_to"
+        case visibleTo = "visible_to"
     }
 }
