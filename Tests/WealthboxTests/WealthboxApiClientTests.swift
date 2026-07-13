@@ -135,6 +135,122 @@ struct WealthboxApiClientTests {
     }
 
     @Test
+    func createTaskPostsExpectedBodyAndDecodesResponse() throws {
+        let expectedToken = "token-task"
+        nonisolated(unsafe) var capturedBody: [String: Any]?
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/tasks")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "ACCESS_TOKEN") == expectedToken)
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            if let data = requestBodyData(from: request) {
+                capturedBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            return makeJSONResponse(statusCode: 201, body: WBTask.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session, accessToken: expectedToken)
+
+        let task = try client.createTask(
+            name: "Follow up: rebalance review",
+            dueDate: "2026-07-20 11:00 AM -0400",
+            description: "From 7/13 meeting. expanse://household/42/meeting/7",
+            linkedTo: [WBTaskLink(id: 42, type: "Contact", name: "The Andersons")],
+            assignedTo: 5,
+            priority: "High",
+            customFields: [WBCustomFieldRequest(id: 9, value: "Retirement")]
+        )
+
+        #expect(task.id == 1)
+        #expect(task.name == "Return Bill's call")
+        #expect(task.descriptionHtml == "<div>Follow up from message...</div>")
+        #expect(capturedBody?["name"] as? String == "Follow up: rebalance review")
+        #expect(capturedBody?["due_date"] as? String == "2026-07-20 11:00 AM -0400")
+        #expect(capturedBody?["description"] as? String == "From 7/13 meeting. expanse://household/42/meeting/7")
+        #expect(capturedBody?["assigned_to"] as? Int == 5)
+        #expect(capturedBody?["priority"] as? String == "High")
+        let linked = capturedBody?["linked_to"] as? [[String: Any]]
+        #expect(linked?.first?["id"] as? Int == 42)
+        #expect(linked?.first?["type"] as? String == "Contact")
+        let customFields = capturedBody?["custom_fields"] as? [[String: Any]]
+        #expect(customFields?.first?["id"] as? Int == 9)
+        #expect(customFields?.first?["value"] as? String == "Retirement")
+    }
+
+    @Test
+    func createTaskConvenienceLinksSingleContactAndOmitsEmptyFields() throws {
+        nonisolated(unsafe) var capturedBody: [String: Any]?
+        let session = URLSession.stubbed { request in
+            if let data = requestBodyData(from: request) {
+                capturedBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            return makeJSONResponse(statusCode: 201, body: WBTask.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        _ = try client.createTask(name: "Send letter", dueDate: "2026-07-20 09:00 AM -0400", contactId: 7)
+
+        #expect(capturedBody?["name"] as? String == "Send letter")
+        // Optional fields are nil and must be omitted, not sent as null.
+        #expect(capturedBody?.keys.contains("assigned_to") == false)
+        #expect(capturedBody?.keys.contains("priority") == false)
+        #expect(capturedBody?.keys.contains("custom_fields") == false)
+        let linked = capturedBody?["linked_to"] as? [[String: Any]]
+        #expect(linked?.first?["id"] as? Int == 7)
+        #expect(linked?.first?["type"] as? String == "Contact")
+    }
+
+    @Test
+    func getTaskAppendsIdentifierToTasksEndpoint() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.absoluteString == "https://example.com/v1/tasks/1234")
+            #expect(request.httpMethod == "GET")
+            return makeJSONResponse(statusCode: 200, body: WBTask.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let task = try client.getTask(id: 1234)
+
+        #expect(task.id == 1)
+        #expect(task.complete == true)
+    }
+
+    @Test
+    func getTasksBuildsDocumentedFilterQueryParameters() throws {
+        let session = URLSession.stubbed { request in
+            #expect(request.url?.path == "/v1/tasks")
+            let queryItems = Dictionary(
+                uniqueKeysWithValues: URLComponents(
+                    url: try #require(request.url),
+                    resolvingAgainstBaseURL: false
+                )?.queryItems?.map { ($0.name, $0.value) } ?? []
+            )
+            #expect(queryItems == [
+                "resource_id": "42",
+                "resource_type": "Contact",
+                "completed": "true",
+                "task_type": "parents",
+                "updated_since": "2026-07-01 00:00 AM -0400"
+            ])
+            return makeJSONResponse(statusCode: 200, body: WBTasks.sampleJSON(), request: request)
+        }
+        let client = WealthboxApiClient(baseURL: "https://example.com", session: session)
+
+        let tasks = try client.getTasks(
+            filters: WBTaskListFilters(
+                resourceId: 42,
+                resourceType: "Contact",
+                completed: true,
+                taskType: "parents",
+                updatedSince: "2026-07-01 00:00 AM -0400"
+            )
+        )
+
+        #expect(tasks.tasks.count == 1)
+        #expect(tasks.page == 1)
+        #expect(tasks.perPage == 25)
+    }
+
+    @Test
     func getContactsBuildsDocumentedFilterQueryParameters() throws {
         let session = URLSession.stubbed { request in
             #expect(request.url?.path == "/v1/contacts")

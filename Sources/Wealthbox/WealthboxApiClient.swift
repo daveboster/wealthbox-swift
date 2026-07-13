@@ -7,6 +7,7 @@ public enum FetchMethods: String, Sendable {
     case customFields = "/v1/categories/custom_fields"
     case contacts = "/v1/contacts"
     case notes = "/v1/notes"
+    case tasks = "/v1/tasks"
 }
 
 public final class WealthboxApiClient: Sendable {
@@ -179,6 +180,93 @@ public final class WealthboxApiClient: Sendable {
     @discardableResult
     public func createNote(content: String, contactId: Int) throws -> WBNote {
         try createNote(content: content, linkedTo: [WBNoteLink(id: contactId, type: "Contact")])
+    }
+
+    // MARK: - Tasks
+
+    /// Fetches a single task by its Wealthbox identifier via `GET /v1/tasks/{id}`.
+    ///
+    /// This is the readback path for a task's status (`complete`, `completer`,
+    /// `updated_at`): Wealthbox exposes no task webhooks, so a consumer polls
+    /// this endpoint — or `getTasks(filters:)` scoped to the linked record — to
+    /// learn when a task was completed.
+    public func getTask(id: Int) throws -> WBTask {
+        try get(.tasks, id: id)
+    }
+
+    /// Fetches tasks using the documented `GET /v1/tasks` list filters.
+    ///
+    /// Scope the poll to a household/contact with
+    /// `WBTaskListFilters(resourceId:resourceType:)` and pass `completed: true`
+    /// to include finished tasks; `updatedSince` narrows a poll to work changed
+    /// since the last check.
+    public func getTasks(filters: WBTaskListFilters = WBTaskListFilters()) throws -> WBTasks {
+        try get(.tasks, queryItems: filters.queryItems())
+    }
+
+    /// Creates a task via `POST /v1/tasks`.
+    ///
+    /// - Parameters:
+    ///   - name: The task title (required).
+    ///   - dueDate: A Wealthbox datetime string, e.g.
+    ///     `"2015-05-24 11:00 AM -0400"` (required).
+    ///   - description: Optional task body. Wealthbox renders it and returns
+    ///     both `description` and `description_html`, so a plain-text back
+    ///     reference (deep link) placed here is preserved on the task.
+    ///   - linkedTo: Records to attach the task to. Linking by a contact's own
+    ///     id with `type: "Contact"` works for people, households, and
+    ///     organizations, since all are contacts.
+    ///   - assignedTo / assignedToTeam: Mutually exclusive assignment — a user
+    ///     id or a team id, not both.
+    ///   - category / priority / visibleTo / customFields / subtasks: The
+    ///     remaining documented optional create fields.
+    @discardableResult
+    public func createTask(
+        name: String,
+        dueDate: String,
+        description: String? = nil,
+        linkedTo: [WBTaskLink] = [],
+        assignedTo: Int? = nil,
+        assignedToTeam: Int? = nil,
+        category: Int? = nil,
+        priority: String? = nil,
+        visibleTo: String? = nil,
+        complete: Bool? = nil,
+        customFields: [WBCustomFieldRequest]? = nil,
+        subtasks: [WBSubtaskRequest]? = nil
+    ) throws -> WBTask {
+        let requestBody = WBTaskCreateRequest(
+            name: name,
+            dueDate: dueDate,
+            complete: complete,
+            category: category,
+            priority: priority,
+            visibleTo: visibleTo,
+            description: description,
+            assignedTo: assignedTo,
+            assignedToTeam: assignedToTeam,
+            linkedTo: linkedTo.isEmpty ? nil : linkedTo,
+            customFields: customFields,
+            subtasks: subtasks
+        )
+        let data = try JSONEncoder().encode(requestBody)
+        return try send(.tasks, httpMethod: "POST", body: data)
+    }
+
+    /// Convenience for creating a task linked to a single contact.
+    @discardableResult
+    public func createTask(
+        name: String,
+        dueDate: String,
+        contactId: Int,
+        description: String? = nil
+    ) throws -> WBTask {
+        try createTask(
+            name: name,
+            dueDate: dueDate,
+            description: description,
+            linkedTo: [WBTaskLink(id: contactId, type: "Contact")]
+        )
     }
 
     // MARK: - Generic requests

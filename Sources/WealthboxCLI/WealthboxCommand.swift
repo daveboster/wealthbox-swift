@@ -13,6 +13,8 @@ struct WealthboxCommand: ParsableCommand {
             Contact.self,
             Events.self,
             Event.self,
+            Tasks.self,
+            Task.self,
             EventCategories.self,
             EventCustomFields.self,
             ContactCustomFields.self,
@@ -174,6 +176,60 @@ struct Event: ParsableCommand {
     func run() throws {
         let event = try options.makeClient().getEvent(id: id)
         try options.printJSON(event)
+    }
+}
+
+struct Tasks: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "tasks",
+        abstract: "Fetch Wealthbox tasks (the status-readback poll: no task webhooks exist)."
+    )
+
+    @Option(help: "Scope to tasks linked to this resource id (pair with --resource-type).")
+    var resourceId: Int?
+
+    @Option(help: "Scope to tasks linked to this resource type, e.g. Contact, Project, Opportunity.")
+    var resourceType: String?
+
+    @Option(help: "Include completed tasks. Pass true or false.")
+    var completed: Bool?
+
+    @Option(help: "Filter by task category. Choices: all, parents, subtasks.")
+    var taskType: String?
+
+    @Option(help: "Only return tasks updated on or after this Wealthbox datetime string.")
+    var updatedSince: String?
+
+    @OptionGroup var options: ClientOptions
+
+    func run() throws {
+        let tasks = try options.makeClient().getTasks(
+            filters: WBTaskListFilters(
+                resourceId: resourceId,
+                resourceType: resourceType,
+                completed: completed,
+                taskType: taskType,
+                updatedSince: updatedSince
+            )
+        )
+        try options.printJSON(tasks)
+    }
+}
+
+struct Task: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "task",
+        abstract: "Fetch a Wealthbox task by identifier."
+    )
+
+    @Argument(help: "The Wealthbox task identifier.")
+    var id: Int
+
+    @OptionGroup var options: ClientOptions
+
+    func run() throws {
+        let task = try options.makeClient().getTask(id: id)
+        try options.printJSON(task)
     }
 }
 
