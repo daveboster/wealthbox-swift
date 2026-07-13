@@ -51,6 +51,31 @@ struct ModelDecodingTests {
     }
 
     @Test
+    func taskSamplesDecodeExpectedFieldsLinksAndSubtasks() throws {
+        let task = WBTask.sample()
+        let tasks = WBTasks.sample()
+
+        #expect(task.id == 1)
+        #expect(task.name == "Return Bill's call")
+        #expect(task.complete == true)
+        #expect(task.dueDate == "2015-05-24 11:00 AM -0400")
+        #expect(task.assignedTo == 1)
+        #expect(task.assignedToTeam == 10)
+        #expect(task.priority == "Medium")
+        #expect(task.description == "Follow up from message...")
+        #expect(task.descriptionHtml == "<div>Follow up from message...</div>")
+        #expect(task.linkedTo?.first?.type == "Contact")
+        #expect(task.linkedTo?.first?.name == "Kevin Anderson")
+        #expect(task.customFields?.first?.documentType == "Contact")
+        #expect(task.subtasks?.first?.name == "Call with client")
+        #expect(task.json?.contains("\"due_date\"") == true)
+
+        #expect(tasks.tasks.count == 1)
+        #expect(tasks.page == 1)
+        #expect(tasks.perPage == 25)
+    }
+
+    @Test
     func wealthboxItemTypeClassifiesKnownContacts() throws {
         let contact = WBContact.sample()
 

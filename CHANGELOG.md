@@ -7,6 +7,29 @@ prereleases may include source-breaking API changes as the public Wealthbox
 client surface stabilizes. Patch releases should remain source-compatible
 within the same minor version.
 
+## Unreleased
+
+- Added `WBTask`, `WBTasks`, `WBSubtask`, and `WBTaskLink` models and a task
+  read/write path on `WealthboxApiClient`: `getTask(id:)`, `getTasks(filters:)`,
+  and `createTask(...)` (`GET`/`POST /v1/tasks`) plus a single-contact
+  `createTask` convenience. Create supports the documented fields — `name`,
+  `due_date`, `assigned_to`/`assigned_to_team` (mutually exclusive), `linked_to`
+  (Contact/Project/Opportunity; households link as contacts), `category`,
+  `priority`, `visible_to`, `description`, `custom_fields`, and `subtasks`.
+- Added `WBTaskListFilters` for the documented `GET /v1/tasks` query parameters
+  (`resource_id`, `resource_type`, `assigned_to`, `assigned_to_team`,
+  `created_by`, `completed`, `task_type`, `updated_since`, `updated_before`,
+  `page`, `per_page`). Polling this list — or `getTask(id:)` — is the only
+  status-readback path; Wealthbox exposes no task webhooks (`GET /v1/webhooks`
+  returns 404).
+- Added `WBCustomFieldRequest` (the `{ id, value }` write shape for custom
+  fields) and `WBSubtaskRequest` for task creation.
+- Added read-only `tasks` and `task <id>` CLI subcommands mirroring
+  `events`/`event`.
+- Added Swift Testing coverage for task create (request body and response
+  decoding), single-contact create convenience, get-by-id, list-filter query
+  construction, and model decoding.
+
 ## 0.1.0-alpha.2 - 2026-07-10
 
 - Added iOS and Mac Catalyst platform support so the `Wealthbox` library can be

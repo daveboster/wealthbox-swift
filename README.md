@@ -1,8 +1,9 @@
 # Wealthbox Swift
 
 `wealthbox-swift` is a Swift package for Wealthbox API access from Swift apps
-and terminal workflows. Reads cover the current user/workspace, contacts, and
-events; the library also supports creating notes (`POST /v1/notes`).
+and terminal workflows. Reads cover the current user/workspace, contacts,
+events, and tasks; the library also supports creating notes (`POST /v1/notes`)
+and tasks (`POST /v1/tasks`).
 
 The package exposes a Foundation-only library product named `Wealthbox` and a
 command-line executable named `wealthbox`. It builds for macOS, iOS, iPadOS, and
@@ -29,8 +30,26 @@ let workspace = try client.getCurrentUser()
 let contacts: WBContacts = try client.searchContacts(name: "Anderson")
 let event = try client.getEvent(id: 123)
 
+let task = try client.getTask(id: 456)
+
 // Write: create a note linked to a contact
 let note = try client.createNote(content: "Reviewed the plan.", contactId: 48828625)
+
+// Write: create a task (assignee, due date, linked contact/household, context)
+let created = try client.createTask(
+    name: "Follow up: rebalance review",
+    dueDate: "2026-07-20 11:00 AM -0400",
+    description: "From the 7/13 meeting. expanse://household/42/meeting/7",
+    linkedTo: [WBTaskLink(id: 48828625, type: "Contact")],
+    assignedTo: 5,
+    priority: "High",
+    customFields: [WBCustomFieldRequest(id: 9, value: "Retirement")]
+)
+
+// Status readback is poll-only — Wealthbox exposes no task webhooks.
+let open = try client.getTasks(
+    filters: WBTaskListFilters(resourceId: 48828625, resourceType: "Contact", completed: true)
+)
 
 // Typed errors for retry flows
 do {
@@ -81,6 +100,9 @@ WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --week 0 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox events --from-date 2026-06-01 --until-date 2026-06-30 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event 77622943 --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox tasks --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox tasks --resource-id 48828625 --resource-type Contact --completed true --pretty
+WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox task 123456 --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-categories --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-custom-fields --pretty
 WEALTHBOX_ACCESS_TOKEN=... swift run wealthbox event-update-category 77622943 --from-category-id 2 --to-category-id 1 --pretty
@@ -109,6 +131,12 @@ Wealthbox `contact_type`. Valid values are `Client`, `Past Client`, `Prospect`,
 Use `contacts --name <name>`, `--email <email>`, `--phone <phone>`, and
 `--active <true|false>` to pass the documented contact search parameters to the
 API. Contact filters can be used individually or combined.
+
+Use `tasks` to fetch tasks and `task <id>` to fetch one by identifier. Scope a
+poll with `tasks --resource-id <id> --resource-type Contact` (households are
+contacts), add `--completed true` to include finished tasks, and `--updated-since
+"<datetime>"` to narrow to recent changes. This poll is the only status-readback
+path: Wealthbox exposes no task webhooks.
 
 Use `event-categories` to fetch the event category id/name values from
 Wealthbox's customizable categories endpoint. Event records expose their
