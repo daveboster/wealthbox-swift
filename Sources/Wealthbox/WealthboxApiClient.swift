@@ -148,7 +148,21 @@ public final class WealthboxApiClient: Sendable {
         return try get(.contacts, queryItems: queryItems)
     }
 
-    // MARK: - Notes (write)
+    // MARK: - Notes
+
+    /// Fetches a single note by its Wealthbox identifier via `GET /v1/notes/{id}`.
+    public func getNote(id: Int) throws -> WBNote {
+        try get(.notes, id: id)
+    }
+
+    /// Fetches notes using the documented `GET /v1/notes` list filters.
+    ///
+    /// Wealthbox returns the collection under a `status_updates` key; use
+    /// `WBNotes.notes` to read it. Scope the list to a contact/household with
+    /// `WBNoteListFilters(resourceId:resourceType:)`.
+    public func getNotes(filters: WBNoteListFilters = WBNoteListFilters()) throws -> WBNotes {
+        try get(.notes, queryItems: filters.queryItems())
+    }
 
     /// Creates a note via `POST /v1/notes`, optionally linking it to Wealthbox
     /// records.
@@ -161,16 +175,21 @@ public final class WealthboxApiClient: Sendable {
     ///     specific `linked_to` type (confirmed against the live Wealthbox API)
     ///     can set it explicitly via `WBNoteLink(id:type:)`.
     ///   - visibleTo: Optional visibility (e.g. `"Everyone"`, `"Private"`).
+    ///   - tags: Optional tag names to associate with the note. Tags are a
+    ///     documented note create/update attribute (`tags: Array (string)`);
+    ///     tasks have no equivalent field.
     @discardableResult
     public func createNote(
         content: String,
         linkedTo: [WBNoteLink] = [],
-        visibleTo: String? = nil
+        visibleTo: String? = nil,
+        tags: [String]? = nil
     ) throws -> WBNote {
-        let requestBody = WBNoteCreateRequest(
+        let requestBody = WBNoteWriteRequest(
             content: content,
             linkedTo: linkedTo.isEmpty ? nil : linkedTo,
-            visibleTo: visibleTo
+            visibleTo: visibleTo,
+            tags: tags
         )
         let data = try JSONEncoder().encode(requestBody)
         return try send(.notes, httpMethod: "POST", body: data)
@@ -180,6 +199,34 @@ public final class WealthboxApiClient: Sendable {
     @discardableResult
     public func createNote(content: String, contactId: Int) throws -> WBNote {
         try createNote(content: content, linkedTo: [WBNoteLink(id: contactId, type: "Contact")])
+    }
+
+    /// Updates an existing note via `PUT /v1/notes/{id}`.
+    ///
+    /// This is the documented update-in-place path for a note: the supplied
+    /// `content` replaces the note body (it is not appended). `linkedTo`,
+    /// `visibleTo`, and `tags` mirror the create attributes; pass the values
+    /// the note should end up with — omitted optionals are left out of the
+    /// request body entirely.
+    ///
+    /// Wealthbox documents no `DELETE /v1/notes/{id}` endpoint (the path is
+    /// not routed), so updating a note is also the only API-side cleanup
+    /// mechanism for note content.
+    @discardableResult
+    public func updateNote(
+        id: Int,
+        content: String,
+        linkedTo: [WBNoteLink]? = nil,
+        visibleTo: String? = nil,
+        tags: [String]? = nil
+    ) throws -> WBNote {
+        let requestBody = WBNoteWriteRequest(
+            content: content,
+            linkedTo: linkedTo,
+            visibleTo: visibleTo,
+            tags: tags
+        )
+        return try put(.notes, id: id, body: requestBody)
     }
 
     // MARK: - Tasks
@@ -269,6 +316,16 @@ public final class WealthboxApiClient: Sendable {
         )
     }
 
+    /// Deletes a task via `DELETE /v1/tasks/{id}`.
+    ///
+    /// Wealthbox responds `200` with the deleted task's JSON body, which is
+    /// decoded and returned. Notes have no documented delete counterpart —
+    /// see `updateNote(id:content:linkedTo:visibleTo:tags:)`.
+    @discardableResult
+    public func deleteTask(id: Int) throws -> WBTask {
+        try delete(.tasks, id: id)
+    }
+
     // MARK: - Generic requests
 
     public func get<T: WBData>(_ method: FetchMethods, id: Int? = nil, queryItems: [URLQueryItem] = []) throws -> T {
@@ -278,6 +335,10 @@ public final class WealthboxApiClient: Sendable {
     private func put<T: WBData, Body: Encodable>(_ method: FetchMethods, id: Int? = nil, body: Body) throws -> T {
         let data = try JSONEncoder().encode(body)
         return try send(method, id: id, httpMethod: "PUT", body: data)
+    }
+
+    private func delete<T: WBData>(_ method: FetchMethods, id: Int) throws -> T {
+        try send(method, id: id, httpMethod: "DELETE", body: Optional<Data>.none)
     }
 
     private func send<T: WBData>(
@@ -432,18 +493,22 @@ public final class WealthboxApiClient: Sendable {
 
 // MARK: - Request bodies
 
-/// Encodable request body for `POST /v1/notes`.
+/// Encodable request body for `POST /v1/notes` and `PUT /v1/notes/{id}`,
+/// which document the same attributes (`content`, `linked_to`, `visible_to`,
+/// `tags`).
 ///
-/// `nil` optionals are omitted from the encoded JSON, so a note with no links
-/// or explicit visibility sends only `content`.
-struct WBNoteCreateRequest: Encodable {
+/// `nil` optionals are omitted from the encoded JSON, so a note with no links,
+/// explicit visibility, or tags sends only `content`.
+struct WBNoteWriteRequest: Encodable {
     let content: String
     let linkedTo: [WBNoteLink]?
     let visibleTo: String?
+    let tags: [String]?
 
     enum CodingKeys: String, CodingKey {
         case content
         case linkedTo = "linked_to"
         case visibleTo = "visible_to"
+        case tags
     }
 }
