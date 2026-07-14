@@ -153,7 +153,7 @@ struct WealthboxApiClientTests {
         let task = try client.createTask(
             name: "Follow up: rebalance review",
             dueDate: "2026-07-20 11:00 AM -0400",
-            description: "From 7/13 meeting. expanse://household/42/meeting/7",
+            description: "From 7/13 meeting. app://household/42/meeting/7",
             linkedTo: [WBTaskLink(id: 42, type: "Contact", name: "The Andersons")],
             assignedTo: 5,
             priority: "High",
@@ -165,7 +165,7 @@ struct WealthboxApiClientTests {
         #expect(task.descriptionHtml == "<div>Follow up from message...</div>")
         #expect(capturedBody?["name"] as? String == "Follow up: rebalance review")
         #expect(capturedBody?["due_date"] as? String == "2026-07-20 11:00 AM -0400")
-        #expect(capturedBody?["description"] as? String == "From 7/13 meeting. expanse://household/42/meeting/7")
+        #expect(capturedBody?["description"] as? String == "From 7/13 meeting. app://household/42/meeting/7")
         #expect(capturedBody?["assigned_to"] as? Int == 5)
         #expect(capturedBody?["priority"] as? String == "High")
         let linked = capturedBody?["linked_to"] as? [[String: Any]]

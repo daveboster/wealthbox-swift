@@ -39,7 +39,7 @@ let note = try client.createNote(content: "Reviewed the plan.", contactId: 48828
 let created = try client.createTask(
     name: "Follow up: rebalance review",
     dueDate: "2026-07-20 11:00 AM -0400",
-    description: "From the 7/13 meeting. expanse://household/42/meeting/7",
+    description: "From the 7/13 meeting. app://household/42/meeting/7",
     linkedTo: [WBTaskLink(id: 48828625, type: "Contact")],
     assignedTo: 5,
     priority: "High",
@@ -173,6 +173,28 @@ CLANG_MODULE_CACHE_PATH=/private/tmp/clang-module-cache swift run wealthbox --he
 
 Live Wealthbox API calls are not part of the default test suite. They require
 `WEALTHBOX_ACCESS_TOKEN` and should be run manually.
+
+## QA Workspace Testing (Tier 2)
+
+`Tests/WealthboxQAIntegrationTests` is an opt-in integration suite that
+runs against a dedicated test-only Wealthbox workspace ("QA"). It is
+skipped entirely — zero network calls — unless
+`WEALTHBOX_QA_ACCESS_TOKEN` is supplied at call time via the Keychain
+wrapper, and it never runs in CI:
+
+```bash
+bin/wb-qa-run swift run wealthbox-qa verify
+bin/wb-qa-run swift test --filter WealthboxQAIntegrationTests
+bin/wb-qa-run swift run wealthbox-qa sweep --execute
+```
+
+Every run starts behind a `/v1/me` workspace-identity guard (the
+`WealthboxQA` library product, shared with consuming-app smoke tests),
+test artifacts carry `wb-qa-test` run markers, and the `wealthbox-qa`
+CLI sweeps marked artifacts only. See
+[docs/QA_WORKSPACE_TESTING.md](docs/QA_WORKSPACE_TESTING.md) for
+Keychain setup, the identity-guard rules, manual seeding of the sample
+households, and the contract-question test map.
 
 ## Versioning
 

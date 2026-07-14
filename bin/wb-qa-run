@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+# wb-qa-run — run one command with the Wealthbox QA-workspace
+# credentials read from the macOS Keychain at call time.
+#
+# This is the only sanctioned way to supply the QA key to the tier-2
+# integration suite and the wealthbox-qa CLI (a keychain-backed credential
+# wrapper): the key lives
+# only in the Keychain, is exported only into the environment of the single
+# command this script executes, and never appears in the repo, shell history,
+# or logs.
+#
+# One-time setup (values from the team's private runbook — never commit them):
+#
+#   security add-generic-password -U \
+#     -s wealthbox-swift-qa \
+#     -a WEALTHBOX_QA_ACCESS_TOKEN \
+#     -w '<qa-api-key>'
+#
+#   security add-generic-password -U \
+#     -s wealthbox-swift-qa \
+#     -a WEALTHBOX_QA_WORKSPACE_ID \
+#     -w '<qa-workspace-id>'
+#
+# Usage:
+#
+#   bin/wb-qa-run swift test --filter WealthboxQAIntegrationTests
+#   bin/wb-qa-run swift run wealthbox-qa verify
+#   bin/wb-qa-run swift run wealthbox-qa sweep
+#   bin/wb-qa-run swift run wealthbox-qa sweep --execute
+#
+# Already-exported WEALTHBOX_QA_* variables take precedence over the
+# Keychain (matching bin/load-wealthbox-token). Override the Keychain service
+# with WEALTHBOX_QA_KEYCHAIN_SERVICE.
+
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+  sed -n '3,34p' "$0" | sed 's/^# \{0,1\}//'
+  exit 64
+fi
+
+keychain_service="${WEALTHBOX_QA_KEYCHAIN_SERVICE:-wealthbox-swift-qa}"
+
+read_keychain_item() {
+  local account="$1"
+
+  if ! command -v security >/dev/null 2>&1; then
+    return 1
+  fi
+
+  security find-generic-password \
+    -s "$keychain_service" \
+    -a "$account" \
+    -w 2>/dev/null
+}
+
+fail_missing() {
+  local account="$1"
+
+  printf 'wb-qa-run: no %s in the environment and no Keychain item (service "%s", account "%s").\n' \
+    "$account" "$keychain_service" "$account" >&2
+  printf 'Add it once with:\n  security add-generic-password -U -s %s -a %s -w '\''<value>'\''\n' \
+    "$keychain_service" "$account" >&2
+  exit 78
+}
+
+if [[ -z "${WEALTHBOX_QA_ACCESS_TOKEN:-}" ]]; then
+  WEALTHBOX_QA_ACCESS_TOKEN="$(read_keychain_item WEALTHBOX_QA_ACCESS_TOKEN)" \
+    || fail_missing WEALTHBOX_QA_ACCESS_TOKEN
+fi
+
+if [[ -z "${WEALTHBOX_QA_WORKSPACE_ID:-}" ]]; then
+  WEALTHBOX_QA_WORKSPACE_ID="$(read_keychain_item WEALTHBOX_QA_WORKSPACE_ID)" \
+    || fail_missing WEALTHBOX_QA_WORKSPACE_ID
+fi
+
+export WEALTHBOX_QA_ACCESS_TOKEN
+export WEALTHBOX_QA_WORKSPACE_ID
+
+exec "$@"
